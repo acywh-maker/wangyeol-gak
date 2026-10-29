@@ -127,3 +127,28 @@ def test_split_media_titles_numbered():
     assert [e.title for e in eps] == ["4강 기획법 (66:00) (1/2)", "4강 기획법 (66:00) (2/2)"]
     rest = planner.plan(s, 55, start=eps[0].end, first_index=2)
     assert rest[0].title == "4강 기획법 (66:00) (이어서)"
+
+
+def test_episodes_from_starts_matches_plan():
+    lens = ["14:10", "18:27", "17:44", "66:00", "24:14", "32:00"]
+    s = season([blk("heading_2", "강의 목록")] + [blk("to_do", f"{i}강 ({t})") for i, t in enumerate(lens, start=1)])
+    eps = planner.plan(s, 55)
+    again = planner.episodes_from_starts(s, [e.start for e in eps])
+    assert [(e.title, e.minutes) for e in again] == [(e.title, e.minutes) for e in eps]
+
+
+def test_replan_keeps_done_episodes():
+    s = season([para_minutes(5) for _ in range(12)])
+    starts = [e.start for e in planner.plan(s, 10)]  # 6화
+    new = planner.replan(s, 20, starts, keep=2)
+    assert new[:2] == starts[:2]
+    assert len(planner.episodes_from_starts(s, new)) == 2 + 2  # 남은 40분을 20분씩
+    assert planner.starts_valid(s, new) and not planner.starts_valid(s, [(99, 0)])
+
+
+def test_trailing_heading_moves_to_next_episode():
+    # 1강 남은 25분 + 소제목, 2강(9:40)은 통째로 넣으면 115% 초과이고 자르면 4분만 남아 못 자름 → 소제목은 다음 회차 시작
+    s = season([blk("to_do", "1강 (55:00)"), blk("heading_3", "2강 소개"), blk("to_do", "2강 (9:40)")])
+    eps = planner.plan(s, 30)
+    assert [seg.unit for seg in eps[1].segments] == [0]
+    assert eps[2].title == "2강 소개"

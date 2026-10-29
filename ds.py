@@ -1,12 +1,13 @@
-"""Design-system helpers for Streamlit.
+"""완결각 디자인 시스템 도우미.
 
 Usage:
     import ds
-    ds.apply()                       # once, at the top of every page
-    ds.header("독서 루틴 알림 만들기", back="?")
-    ds.chips(["# 판타지", "# 로맨스", "+ 9개"])
-    with st.container(key="ds-cta"):  # becomes a fixed yellow bar on mobile
+    ds.apply()                       # 페이지마다 맨 위에서 1번 (tokens.css + components.css)
+    ds.chips(["# 마케팅", "+ 3개"])
+    with st.container(key="ds-cta"):  # 모바일에서 하단 고정 primary 바
         st.button("확인", type="primary", width="stretch")
+
+토큰 값은 tokens.json에서 고치고 `python scripts/build_tokens.py`를 실행한다.
 """
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ from pathlib import Path
 import streamlit as st
 
 _HERE = Path(__file__).parent
-CSS_PATH = _HERE / "tokens.css"
+CSS_PATHS = (_HERE / "tokens.css", _HERE / "components.css")
 TOKENS_PATH = _HERE / "tokens.json"
 
 
@@ -25,8 +26,9 @@ TOKENS_PATH = _HERE / "tokens.json"
 # setup
 # --------------------------------------------------------------------------
 def apply() -> None:
-    """Inject tokens.css into the page (call once per page run)."""
-    st.html(f"<style>{CSS_PATH.read_text(encoding='utf-8')}</style>")
+    """tokens.css + components.css를 페이지에 넣는다 (매 실행 맨 위에서 1번)."""
+    css = "\n".join(p.read_text(encoding="utf-8") for p in CSS_PATHS)
+    st.html(f"<style>{css}</style>")
 
 
 def tokens() -> dict:
@@ -56,46 +58,6 @@ def chips(items: list[str]) -> None:
     _render(f'<div class="ds-chips">{inner}</div>')
 
 
-def badge(label: str, icon: str = "&#9679;", kind: str = "default") -> str:
-    """Category badge. kind: default | audio | chat. Returns HTML (compose inside hero)."""
-    mod = f" ds-badge--{kind}" if kind != "default" else ""
-    return (f'<div class="ds-badge{mod}"><span class="ds-badge__icon">{icon}</span>'
-            f'{escape(label)}</div>')
-
-
-def glass_pill(label: str, value: str) -> str:
-    return f'<span class="ds-glass-pill">{escape(label)} <b>{escape(value)}</b></span>'
-
-
-def meta(rating: float | None, items: list[str]) -> None:
-    parts = []
-    if rating is not None:
-        parts.append(f'<span><span class="ds-meta__star">&#9733;</span> {rating:.1f}</span>')
-    for it in items:
-        parts.append(f'<span class="ds-meta__sep"></span><span>{escape(it)}</span>')
-    _render(f'<div class="ds-meta">{"".join(parts)}</div>')
-
-
-def cover(src: str | None = None, width: int = 200, alt: str = "") -> str:
-    """Book cover. Without src, renders a neutral placeholder."""
-    if src:
-        body = f'<img src="{escape(src)}" alt="{escape(alt)}">'
-    else:
-        body = (f'<div style="aspect-ratio:2/3;background:linear-gradient(160deg,#3a3a3f,#77737a);'
-                f'display:grid;place-items:center;color:#fff;font-weight:700">{escape(alt or "COVER")}</div>')
-    return f'<div class="ds-cover" style="width:{width}px">{body}</div>'
-
-
-def detail_hero(cover_html: str, pill_html: str = "", badge_html: str = "") -> None:
-    """Blurred-background hero used on the content detail page."""
-    _render(f'<div class="ds-hero">{pill_html}{cover_html}{badge_html}</div>')
-
-
-def sheet(inner_html: str) -> None:
-    """Bottom-sheet surface (top corners rounded). Place right after detail_hero."""
-    _render(f'<div class="ds-sheet">{inner_html}</div>')
-
-
 def card(inner_html: str) -> None:
     _render(f'<div class="ds-card">{inner_html}</div>')
 
@@ -109,16 +71,3 @@ def notice(title: str, body: str, icon: str = "") -> None:
 def bullets(items: list[str]) -> None:
     inner = "".join(f"<li>{escape(i)}</li>" for i in items)
     _render(f'<ul class="ds-bullets">{inner}</ul>')
-
-
-def tabbar(items: list[tuple[str, str, str]], active: str) -> None:
-    """Mobile-only bottom navigation.
-
-    items: [(key, label, icon_html), ...]. Links set ?tab=<key>;
-    read it back with st.query_params.get("tab").
-    """
-    links = []
-    for key, label, icon in items:
-        cur = ' aria-current="page"' if key == active else ""
-        links.append(f'<a href="?tab={escape(key)}" target="_self"{cur}><span>{icon}</span>{escape(label)}</a>')
-    _render(f'<nav class="ds-tabbar">{"".join(links)}</nav>')

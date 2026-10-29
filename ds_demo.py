@@ -1,114 +1,87 @@
-"""Demo: style guide + two mobile screens rebuilt with the design system.
+"""완결각 디자인 시스템 견본 — 토큰과 화면 부품을 한 화면에서 본다.
 
-Run:  streamlit run app.py
-Mobile check: open DevTools > device toolbar (width < 600px).
+Run:  streamlit run ds_demo.py   (모바일 확인: 개발자 도구 기기 모드, 폭 600px 미만)
+색은 모두 var(--토큰)으로 칠하므로 tokens.json을 고치고 scripts/build_tokens.py를 돌리면 그대로 반영된다.
 """
 import streamlit as st
 
 import ds
 
-st.set_page_config(page_title="Design System", layout="centered")
+st.set_page_config(page_title="완결각 디자인 시스템", layout="centered")
 ds.apply()
-
-TABS = [
-    ("guide",   "가이드", "&#9638;"),
-    ("routine", "루틴",   "&#9719;"),
-    ("detail",  "상세",   "&#9636;"),
-]
-tab = st.query_params.get("tab", "guide")
+if (st.pills("테마", ["다크", "라이트"], default="다크", label_visibility="collapsed") or "다크") == "다크":
+    st.html('<div class="wg-theme-dark"></div>')
 
 
-# --------------------------------------------------------------------------
-def page_guide():
-    st.title("Design System")
-    st.caption("tokens.json · tokens.css · config.toml")
-
-    t = ds.tokens()
-
-    st.subheader("Color")
-    for group in ("gray", "yellow", "category"):
-        swatches = "".join(
-            f'<div style="text-align:center;font-size:11px;color:var(--text-tertiary)">'
-            f'<div style="width:56px;height:56px;border-radius:var(--radius-sm);background:{v["$value"]};'
-            f'border:1px solid var(--line-default)"></div>{k}<br>{v["$value"]}</div>'
-            for k, v in t["color"][group].items()
-        )
-        st.html(f'<p class="ds-caption" style="margin:8px 0 4px">{group}</p>'
-                f'<div style="display:flex;flex-wrap:wrap;gap:8px">{swatches}</div>')
-
-    st.subheader("Typography")
-    for name in ("display", "title-lg", "title-md", "title-sm", "body-lg", "body-md", "caption"):
-        st.html(f'<div class="ds-{name}">{name} — 오늘도 한 페이지 더</div>')
-    ds.overline("Original")
-
-    st.subheader("Radius · Shadow")
-    boxes = "".join(
-        f'<div style="text-align:center;font-size:11px;color:var(--text-tertiary)">'
-        f'<div style="width:72px;height:72px;background:var(--bg-default);border-radius:var(--radius-{r});'
-        f'box-shadow:var(--shadow-md);margin-bottom:6px"></div>{r}</div>'
-        for r in ("xs", "sm", "md", "lg", "xl", "2xl", "pill")
+def swatches(title: str, names: list[str]) -> None:
+    cells = "".join(
+        f'<div style="text-align:center;font-size:11px;color:var(--text-tertiary);width:72px">'
+        f'<div style="height:48px;border-radius:var(--radius-sm);background:var(--{n});'
+        f'border:1px solid var(--line-default);margin-bottom:4px"></div>{n}</div>'
+        for n in names
     )
-    st.html(f'<div style="display:flex;flex-wrap:wrap;gap:16px;padding:8px">{boxes}</div>')
-
-    st.subheader("Components")
-    ds.chips(["# 판타지", "# 성장물", "# 힐링", "+ 9개"])
-    st.html('<div style="display:flex;gap:12px;margin-top:12px">'
-            + ds.badge("웹소설", "&#9636;")
-            + ds.badge("오디오", "&#9835;", "audio")
-            + ds.badge("챗북", "&#9993;", "chat") + "</div>")
-    ds.meta(4.8, ["연재", "판타지", "2026.10.28"])
-    c1, c2 = st.columns(2)
-    c1.button("Primary", type="primary", width="stretch")
-    c2.button("Secondary", width="stretch")
-    st.checkbox("체크박스")
-    st.text_input("입력", placeholder="검색어를 입력하세요")
+    st.html(f'<p class="wg-label" style="margin-top:16px">{title}</p>'
+            f'<div style="display:flex;flex-wrap:wrap;gap:8px">{cells}</div>')
 
 
-# --------------------------------------------------------------------------
-def page_routine():
-    ds.header("독서 루틴 알림 만들기", back="?tab=guide")
-    st.write("")
-    # horizontal container keeps the 3 pickers in one row on mobile (st.columns would stack)
-    with st.container(horizontal=True, key="ds-row-time"):
-        st.selectbox("오전/오후", ["오전", "오후"], label_visibility="collapsed")
-        st.selectbox("시", [f"{h:02d}" for h in range(1, 13)], index=7, label_visibility="collapsed")
-        st.selectbox("분", [f"{m:02d}" for m in range(0, 60, 10)], label_visibility="collapsed")
-    st.checkbox("**야간 수신 동의** 21시-08시 사이에도 알림을 받을래요")
-    ds.notice(
-        "독서 루틴 만들기",
-        "출퇴근길 40분, 잠들기 전 20분처럼 조금 더 쉽게 독서할 수 있도록.\n"
-        "원하는 시간에 알림을 받아 독서 루틴을 만들어보세요.",
-        icon="&#9719;",
-    )
-    st.write("")
-    ds.bullets([
-        "수신 동의는 관리 > 알림 설정에서 확인할 수 있습니다.",
-        "알림은 설정한 요일, 시간에 맞춰 앱 푸시로 보내 드립니다.",
-        "21시~08시로 설정한 경우, 야간 수신 동의를 꼭 체크해주세요.",
-    ])
-    with st.container(key="ds-cta"):
-        st.button("확인", type="primary", width="stretch")
+st.html('<div class="wg-title">완결각 디자인 시스템</div>'
+        '<div class="wg-meta">tokens.json → scripts/build_tokens.py → tokens.css · components.css · config.toml</div>')
 
+st.subheader("브랜드 · 의미 색")
+swatches("brand (교체 예정)", ["brand-400", "brand-500", "brand-600"])
+swatches("action", ["action-primary", "action-primary-press", "action-secondary", "action-highlight"])
+swatches("bg · text", ["bg-default", "bg-surface", "bg-notice", "text-strong", "text-primary", "text-tertiary", "text-on-surface"])
+swatches("status (배지·회차 상태)", ["status-arrived-bg", "status-waiting-bg", "status-done-bg",
+                                    "status-gift-line", "status-read-fg", "status-current-bg"])
 
-# --------------------------------------------------------------------------
-def page_detail():
-    ds.detail_hero(
-        cover_html=ds.cover(alt="SAMPLE", width=200),
-        pill_html=ds.glass_pill("이 책이 담긴 서재", "1.1만+"),
-        badge_html=ds.badge("웹소설", "&#9636;"),
-    )
-    st.html(
-        '<div class="ds-sheet" style="margin-top:-28px;position:relative">'
-        '<div class="ds-overline" style="margin-bottom:8px">Original</div>'
-        '<div class="ds-title-md" style="margin-bottom:8px">[독점] 샘플 작품 제목</div>'
-        '<div class="ds-body-lg" style="font-weight:700;color:var(--text-secondary);margin-bottom:20px">작가명 &#8250;</div>'
-        '</div>'
-    )
-    ds.meta(5.0, ["연재", "로맨스", "2026.10.28"])
-    st.write("")
-    ds.chips(["# 직진남", "# 가상시대물", "# 다정녀", "+ 9개"])
+st.subheader("글자")
+for name in ("display", "title-lg", "title-md", "title-sm", "body-lg", "body-md", "caption"):
+    st.html(f'<div class="ds-{name}">{name} — 오늘 몫 끝!</div>')
 
+st.subheader("배지")
+st.html('<div style="display:flex;flex-wrap:wrap;gap:8px">'
+        '<span class="wg-badge wg-badge--arrived">오늘의 화 도착</span>'
+        '<span class="wg-badge wg-badge--waiting">14시간 후 도착</span>'
+        '<span class="wg-badge wg-badge--done">완결</span>'
+        '<span class="wg-badge wg-badge--new">새 시즌</span>'
+        '<span class="wg-badge wg-badge--done-ep">✓ 끝냄</span>'
+        '<span class="wg-badge wg-badge--gift">◆ 중간 선물</span></div>')
 
-# --------------------------------------------------------------------------
-{"guide": page_guide, "routine": page_routine, "detail": page_detail}.get(tab, page_guide)()
-ds.tabbar(TABS, active=tab)
+st.subheader("서재 카드")
+with st.container(key="wg-card-demo"):
+    st.html('<div class="wg-card-title">퍼포먼스 마케팅은 Iteration할 수 있는 영역</div>'
+            '<div class="wg-card-meta"><span class="wg-badge wg-badge--arrived">오늘의 화 도착</span><span>3/12화</span></div>')
+
+st.subheader("시즌 홈 회차 행")
+st.html('<div class="wg-ep wg-ep--done"><div class="wg-ep__no">1화 · 약 10분</div>'
+        '<div class="wg-ep__title">1. 목표: 오늘 잘하고 있는지 판단할 기준</div>'
+        '<div class="wg-ep__tags"><span class="wg-badge wg-badge--done-ep">✓ 끝냄</span></div></div>'
+        '<div class="wg-ep wg-ep--current"><div class="wg-ep__no">2화 · 약 10분</div>'
+        '<div class="wg-ep__title">2. 환경: 믿을 수 있는 숫자</div>'
+        '<div class="wg-ep__tags"><span class="wg-badge wg-badge--waiting">내일 06:00 도착 · 14시간 후</span>'
+        '<span class="wg-badge wg-badge--gift">◆ 중간 선물</span></div></div>'
+        '<div class="wg-ep"><div class="wg-ep__no">3화 · 약 9분</div><div class="wg-ep__title">3. 실행: 리듬대로</div></div>')
+
+st.subheader("뷰어 첫머리 · 1분 요약")
+st.html('<div class="wg-viewer-head"><div class="wg-viewer-head__no">논리의 기초 · 2화</div>'
+        '<div class="wg-viewer-head__title">논리적으로 삽시다 (2/4)</div>'
+        '<div class="wg-viewer-head__min">약 30분</div></div>')
+with st.container(key="wg-summary-demo"):
+    st.html('<div class="wg-label">1분 요약</div>인지 다음은 비교·고려 단계. 고객이 망설이는 이유를 줄이는 게 핵심.')
+
+st.subheader("버튼 · 선택지")
+with st.container(key="wg-box-demo"):
+    st.html('<div class="wg-label">다음 화에서 공개 · 예측해 보세요</div>'
+            '<strong>할인 쿠폰 vs 무료 배송, 장바구니 이탈을 더 줄인 건?</strong>')
+    with st.container(horizontal=True, key="ds-row-demo"):  # 같은 크기·같은 스타일 (PRD 7장 8번)
+        st.button("할인 쿠폰", width="stretch")
+        st.button("✓ 무료 배송", width="stretch")
+st.pills("가용시간", ["5분", "10분", "20분", "30분", "60분"], default="30분", label_visibility="collapsed")
+st.button("다 봤어요", type="primary", width="stretch")
+
+st.subheader("안내 상자")
+st.html('<div class="wg-notice"><div class="wg-notice__title">선물이 선택됐어요</div>'
+        '<div>아메리카노 (예시) · 10화 완결 때 도착해요. 결제 기능은 아직 준비 중이에요.</div></div>')
+
+with st.container(key="ds-cta"):
+    st.button("이어보기 · 논리의 기초 2화", type="primary", width="stretch")
