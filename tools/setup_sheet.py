@@ -38,6 +38,7 @@ def write_env(values: dict) -> None:
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")  # Windows 터미널에서 한글이 깨지지 않게
+    sys.stderr.reconfigure(encoding="utf-8")
     if len(sys.argv) != 3:
         sys.exit(__doc__)
     key_path, sheet = Path(sys.argv[1].strip('"')), sys.argv[2]
