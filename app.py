@@ -8,6 +8,8 @@ from __future__ import annotations
 import csv
 import hmac
 import io
+import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from functools import wraps
@@ -393,6 +395,11 @@ def healthz():
     keys = ["NOTION_TOKEN", "NOTION_ROOT_PAGE_ID", "SECRET_KEY", "ADMIN_PASSWORD", "KV_REST_API_URL",
             "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "SHEET_ID"]
     report = {"env": {k: bool(config.get(k)) for k in keys}}
+    # 이름이 비슷한데 정확히 맞지 않는 설정 찾기 (이름만, 값은 절대 안 보여 줌). repr로 공백까지 드러낸다
+    report["similar_env_names"] = sorted(repr(k) for k in os.environ
+                                         if re.search(r"NOTION|KV_|UPSTASH|REDIS|ADMIN|SECRET|SHEET", k, re.I) and k not in keys)
+    report["deployment"] = {"env": os.environ.get("VERCEL_ENV", "local"),
+                            "commit": os.environ.get("VERCEL_GIT_COMMIT_SHA", "")[:7]}
     try:
         report["store"] = type(store.backend()).__name__
         store.reset_cache()
