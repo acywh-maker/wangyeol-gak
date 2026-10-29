@@ -18,3 +18,6 @@ Thumbs.db
 .idea/
 data/
 .vercel/
+
+# 서비스 계정 키 등 실수로 루트에 둔 JSON (tokens 등은 design/ 안에 있음)
+/*.json
