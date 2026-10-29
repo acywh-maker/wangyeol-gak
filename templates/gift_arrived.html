@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block content %}
+{% if gift.kind == 'letter' %}
+<header class="group">
+  <p class="t-meta">중간 선물 · {{ n }}화</p>
+  <h1 class="t-title">나와의 약속을 지켜낸 {{ user.nickname }}님 선물이 도착했어요</h1>
+</header>
+{% else %}
+<h1 class="t-title">스스로 정한 목표를 끝까지 지킨 {{ user.nickname }}님.<br>정말 대단해요, 약속한 선물이에요.<br>축하드려요!</h1>
+{% endif %}
+
+{% if gift.kind == 'gifticon' %}
+<div class="gift-box"><span class="gift__img" aria-hidden="true"></span><p class="t-key" style="color:inherit">{{ gift.gift_item }}</p><span class="stamp">선물 도착</span></div>
+{% elif gift.letter_text %}
+<div class="box"><span class="box__label">{{ written }}의 내가 쓴 편지</span><p class="t-body" style="white-space: pre-line">{{ gift.letter_text }}</p></div>
+{% endif %}
+
+<a class="btn btn--primary btn--block" href="{{ url_for('library') }}">서재로</a>
+{% endblock %}

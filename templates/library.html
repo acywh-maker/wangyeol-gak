@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, topbar %}
+{% block body_class %}{{ 'has-cta' if recent and recent.next_ep else '' }}{% endblock %}
+{% block content %}
+{{ topbar() }}
+
+{# 1구역: 머리 — 화면 제목 + 동기(누적) #}
+<header class="group">
+  <h1 class="t-title">{{ user.nickname }}님의 서재</h1>
+  <p class="stat">지금까지 끝낸 회차 {{ total_done }}개</p>
+</header>
+
+{# 2구역: 시즌 카드 — 오늘 볼 시즌이 맨 위, 오렌지 테두리 (1순위) #}
+{% if states %}
+<ul class="cards">
+  {% for s in states %}
+  {% set kind, label = s.status %}
+  <li>
+    <a class="card{% if kind == 'arrived' %} card--today{% elif kind == 'done' %} card--done{% endif %}" href="{{ url_for('season_home', sid=s.row.id) }}">
+      <span class="card__title">{{ s.row.title }}</span>
+      <span class="card__meta">{{ badge(kind, label) }}<span>{{ s.done|length ~ '/' ~ s.total if s.started else s.total }}화</span></span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="box">아직 서재에 시즌이 없어요.</p>
+{% endif %}
+
+<form method="post" action="{{ url_for('logout') }}"><button class="btn btn--tertiary" type="submit">로그아웃</button></form>
+{% endblock %}
+{% block cta %}
+{% if recent and recent.next_ep %}
+{% set title = recent.row.title if recent.row.title|length <= 14 else recent.row.title[:13] ~ '…' %}
+<div class="cta-bar"><a class="btn btn--primary" href="{{ url_for('episode', sid=recent.row.id, n=recent.current_ep) }}">이어보기 · {{ title }} {{ recent.current_ep }}화</a></div>
+{% endif %}
+{% endblock %}

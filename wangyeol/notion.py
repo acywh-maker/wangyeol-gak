@@ -1,4 +1,5 @@
-"""노션 API 접근 (FR-002). 응답은 st.cache_data로 30분 캐시(NFR-006)."""
+"""노션 API 접근 (FR-002). 응답은 메모리에 30분 캐시(NFR-006). 서버리스에서는 인스턴스가 살아 있는 동안만 유지되고,
+시즌 화면은 Vercel CDN 캐시(Cache-Control)가 한 번 더 받쳐 준다."""
 from __future__ import annotations
 
 import html
@@ -6,10 +7,13 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
-import requests
-import streamlit as st
+import functools
+import threading
+import time
 
-from . import parser
+import requests
+
+from . import config, parser
 
 API = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
@@ -27,10 +31,40 @@ class NotionError(Exception):
     pass
 
 
+def ttl_cache(seconds: int):
+    """인자별 결과를 seconds 동안 기억한다. 실패(예외)는 기억하지 않는다. fn.clear(*args)로 비운다."""
+    def deco(fn):
+        store: dict = {}
+        lock = threading.Lock()
+
+        @functools.wraps(fn)
+        def wrapper(*args):
+            now = time.time()
+            with lock:
+                hit = store.get(args)
+                if hit and now - hit[0] < seconds:
+                    return hit[1]
+            value = fn(*args)
+            with lock:
+                store[args] = (now, value)
+            return value
+
+        def clear(*args):
+            with lock:
+                if args:
+                    store.pop(args, None)
+                else:
+                    store.clear()
+
+        wrapper.clear = clear
+        return wrapper
+    return deco
+
+
 def _session() -> requests.Session:
     s = requests.Session()
     s.headers.update({
-        "Authorization": f"Bearer {st.secrets['NOTION_TOKEN']}",
+        "Authorization": f"Bearer {config.get('NOTION_TOKEN')}",
         "Notion-Version": NOTION_VERSION,
         "Content-Type": "application/json",
     })
@@ -84,11 +118,11 @@ def _title_of(page: dict) -> str:
     return "제목 없음"
 
 
-@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+@ttl_cache(CACHE_TTL)
 def list_seasons() -> list[dict]:
     """루트 페이지 안 첫 번째 인라인 데이터베이스의 행 목록."""
     s = _session()
-    root = st.secrets["NOTION_ROOT_PAGE_ID"]
+    root = config.get("NOTION_ROOT_PAGE_ID")
     db = next((b["id"] for b in _children(s, root, _MAX_DEPTH) if b["type"] == "child_database"), None)
     if not db:
         raise NotionError("루트 페이지에 데이터베이스가 없어요")
@@ -111,12 +145,12 @@ def seasons_for(nickname: str) -> list[dict]:
     return [row for row in list_seasons() if row["owner"] is None or _normalize(row["owner"]) == me]
 
 
-@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
+@ttl_cache(CACHE_TTL)
 def _season_blocks(page_id: str) -> list:
     return _children(_session(), page_id)
 
 
-@st.cache_data(ttl=60 * 60 * 24 * 7, show_spinner=False)
+@ttl_cache(60 * 60 * 24 * 7)
 def youtube_info(video_id: str) -> dict | None:
     """유튜브 영상 길이(초)와 제목. watch 페이지를 읽는다(키 불필요). 실패하면 None."""
     try:

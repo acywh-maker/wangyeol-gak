@@ -4,8 +4,8 @@
 값 형식: "#RRGGBB"(색), 숫자(간격·라운드), "->다른/변수"(별칭).  예) {"brand/400": "#4A8CF2", "status/arrived-bg": "->action/primary"}
 
 사용법:
-  python scripts/sync_figma_tokens.py figma_vars.json --check   # 차이만 보여 줌
-  python scripts/sync_figma_tokens.py figma_vars.json           # tokens.json 갱신 + build_tokens 실행
+  python design/sync_figma_tokens.py figma_vars.json --check   # 차이만 보여 줌
+  python design/sync_figma_tokens.py figma_vars.json           # tokens.json 갱신 + build_tokens 실행
 
 피그마에서 값을 읽어 이 JSON을 만드는 일은 Claude가 Figma MCP(use_figma)로 한다 (README '피그마 연동').
 """
@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TOKENS = ROOT / "tokens.json"
+TOKENS = ROOT / "design" / "tokens.json"
 PRIMITIVE_GROUPS = {"gray", "brand"}
 SEMANTIC_GROUPS = {"bg", "text", "line", "action", "status"}
 
@@ -74,7 +74,7 @@ def main() -> None:
             node = node[p]
         node["$value"] = new
     TOKENS.write_text(json.dumps(tokens, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    subprocess.run([sys.executable, str(ROOT / "scripts" / "build_tokens.py")], check=True)
+    subprocess.run([sys.executable, str(ROOT / "design" / "build_tokens.py")], check=True)
 
 
 if __name__ == "__main__":

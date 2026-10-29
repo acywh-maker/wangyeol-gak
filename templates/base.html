@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko" data-theme="{{ theme }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="{{ 'dark' if theme == 'dark' else 'light' }}">
+  <title>{% block title %}완결각{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='components.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  {% if dev %}<div class="devbar">DEV · {{ now.strftime('%m/%d %H:%M') }}
+    · <a href="{{ url_for('dev_time', h=0, next=request.path) }}">지금</a>
+    · <a href="{{ url_for('dev_time', h=24, next=request.path) }}">+1일</a>
+    · <a href="{{ url_for('dev_time', h=96, next=request.path) }}">+4일</a></div>{% endif %}
+  <main class="page">{% block content %}{% endblock %}</main>
+  {% block cta %}{% endblock %}
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

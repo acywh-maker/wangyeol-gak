@@ -1,34 +1,26 @@
-"""노션 블록을 Streamlit 화면으로 그린다 (FR-004 5번 본문)."""
+"""노션 블록 → HTML (FR-004 5번 본문). 모든 글자는 이스케이프하고, 링크는 http(s)·mailto만 허용한다."""
 from __future__ import annotations
 
-import html
-import re
-
-import streamlit as st
+from html import escape
 
 from .parser import fmt_clock, media_url, plain, rich_text_of
 
-_LIST_TYPES = {"bulleted_list_item", "numbered_list_item"}
-_MD_SPECIAL = re.compile(r"([\\`*_\[\]<>#~|])")
+_LIST_TYPES = {"bulleted_list_item": "ul", "numbered_list_item": "ol"}
 
 
-def _escape(text: str) -> str:
-    return _MD_SPECIAL.sub(r"\\\1", text)
+def _safe_href(href: str | None) -> str | None:
+    return href if href and href.startswith(("http://", "https://", "mailto:")) else None
 
 
-def md(rich_text: list | None) -> str:
-    """노션 rich_text → 마크다운 문자열 (굵게·기울임·취소선·코드·링크).
-
-    강조는 `**` 대신 HTML 태그를 쓴다. `**"인용"**를`처럼 닫는 기호 뒤에 한글 조사가 붙으면
-    마크다운이 굵게 처리하지 않기 때문. 따라서 결과는 unsafe_allow_html=True로 그려야 한다.
-    """
+def rich(rich_text: list | None) -> str:
+    """노션 rich_text → 인라인 HTML (굵게·기울임·취소선·코드·링크)."""
     out = []
     for rt in rich_text or []:
         text = rt.get("plain_text", "")
         if not text:
             continue
         a = rt.get("annotations", {})
-        body = _escape(html.escape(text, quote=False))
+        body = escape(text).replace("\n", "<br>")
         if a.get("code"):
             body = f"<code>{body}</code>"
         if a.get("bold"):
@@ -37,145 +29,107 @@ def md(rich_text: list | None) -> str:
             body = f"<em>{body}</em>"
         if a.get("strikethrough"):
             body = f"<s>{body}</s>"
-        href = rt.get("href") or ""
-        if href.startswith(("http://", "https://", "mailto:")):
-            body = f'<a href="{html.escape(href)}" target="_blank">{body}</a>'
+        href = _safe_href(rt.get("href"))
+        if href:
+            body = f'<a href="{escape(href)}" target="_blank" rel="noopener">{body}</a>'
         out.append(body)
-    return "".join(out).replace("\n", "  \n")
+    return "".join(out)
 
 
-def show(text: str) -> None:
-    """md() 결과를 그린다."""
-    st.markdown(text, unsafe_allow_html=True)
+def youtube_iframe(video_id: str, start: float = 0, end: float | None = None) -> str:
+    params = ["rel=0", "playsinline=1"]
+    if start:
+        params.append(f"start={int(start)}")
+    if end:
+        params.append(f"end={int(end)}")
+    src = f"https://www.youtube-nocookie.com/embed/{escape(video_id)}?{'&amp;'.join(params)}"
+    return (f'<div class="video"><iframe src="{src}" title="YouTube" loading="lazy" '
+            f'allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>')
 
 
-def _list_markdown(items: list, indent: int = 0) -> tuple[str, list]:
-    """연속된 목록 블록을 하나의 마크다운으로. 목록 안의 이미지 등은 따로 돌려준다."""
-    lines, leftovers = [], []
-    num = 0
-    pad = " " * indent
-    for b in items:
-        if b["type"] == "numbered_list_item":
-            num += 1
-            marker = f"{num}."
-        else:
-            marker = "-"
-        lines.append(f"{pad}{marker} {md(rich_text_of(b)) or '&nbsp;'}")
-        child_pad = indent + len(marker) + 1
-        run: list = []
-        for c in b.get("children", []) + [None]:
-            if c is not None and c["type"] in _LIST_TYPES:
-                run.append(c)
-                continue
-            if run:
-                sub, extra = _list_markdown(run, child_pad)
-                lines.append(sub)
-                leftovers += extra
-                run = []
-            if c is None:
-                break
-            if c["type"] == "paragraph":
-                lines.append(" " * child_pad + md(rich_text_of(c)))
-            else:
-                leftovers.append(c)
-    return "\n".join(lines), leftovers
-
-
-def render_blocks(blocks: list) -> None:
-    i = 0
+def blocks_html(blocks: list) -> str:
+    parts, i = [], 0
     while i < len(blocks):
         b = blocks[i]
-        if b["type"] in _LIST_TYPES:
+        tag = _LIST_TYPES.get(b["type"])
+        if tag:
             run = []
-            # 글머리와 번호 목록이 섞이면 번호가 이어지지 않도록 같은 종류끼리 묶는다
             while i < len(blocks) and blocks[i]["type"] == b["type"]:
                 run.append(blocks[i])
                 i += 1
-            text, leftovers = _list_markdown(run)
-            show(text)
-            render_blocks(leftovers)
+            items = "".join(f"<li>{rich(rich_text_of(x))}{blocks_html(x.get('children', []))}</li>" for x in run)
+            parts.append(f"<{tag}>{items}</{tag}>")
             continue
-        render_block(b)
+        parts.append(block_html(b))
         i += 1
+    return "".join(p for p in parts if p)
 
 
-def render_block(b: dict) -> None:
+def block_html(b: dict) -> str:
     t = b["type"]
-    data = b.get(t, {})
-    children = b.get("children", [])
+    data = b.get(t, {}) if isinstance(b.get(t), dict) else {}
+    kids = blocks_html(b.get("children", []))
+    text = rich(rich_text_of(b))
 
     if t == "paragraph":
-        text = md(rich_text_of(b))
-        if text.strip():
-            show(text)
-        render_blocks(children)
-    elif t in ("heading_1", "heading_2", "heading_3"):
-        level = {"heading_1": "###", "heading_2": "###", "heading_3": "####"}[t]
+        return (f"<p>{text}</p>" if text.strip() else "") + kids
+    if t in ("heading_1", "heading_2", "heading_3"):
+        tag = "h4" if t == "heading_3" else "h3"
         if data.get("is_toggleable"):
-            with st.expander(plain(rich_text_of(b)) or " "):
-                render_blocks(children)
-        else:
-            show(f"{level} {md(rich_text_of(b))}")
-    elif t == "quote":
-        body = md(rich_text_of(b)).replace("  \n", "  \n> ")
-        show(f"> {body}")
-        render_blocks(children)
-    elif t == "callout":
+            return f"<details><summary>{text}</summary>{kids}</details>"
+        return f"<{tag}>{text}</{tag}>"
+    if t == "quote":
+        return f"<blockquote>{text}{kids}</blockquote>"
+    if t == "callout":
         icon = data.get("icon") or {}
-        emoji = icon.get("emoji", "") if icon.get("type") == "emoji" else ""
-        with st.container(border=True):
-            show(f"{emoji} {md(rich_text_of(b))}".strip())
-            render_blocks(children)
-    elif t == "to_do":
-        mark = "☑" if data.get("checked") else "☐"
-        show(f"{mark} {md(rich_text_of(b))}")
-        render_blocks(children)
-    elif t == "toggle":
-        with st.expander(plain(rich_text_of(b)) or " "):
-            render_blocks(children)
-    elif t == "divider":
-        st.divider()
-    elif t == "image":
+        emoji = escape(icon.get("emoji", "")) if icon.get("type") == "emoji" else ""
+        return f'<div class="callout">{f"<span>{emoji}</span>" if emoji else ""}<div>{text}{kids}</div></div>'
+    if t == "to_do":
+        return f"<p>{'☑' if data.get('checked') else '☐'} {text}</p>{kids}"
+    if t == "toggle":
+        return f"<details><summary>{text or ' '}</summary>{kids}</details>"
+    if t == "divider":
+        return "<hr>"
+    if t == "image":
         url = media_url(b)
-        if url:
-            st.image(url, caption=plain(data.get("caption")) or None, width="stretch")
-    elif t in ("video", "embed"):
+        if not url:
+            return ""
+        cap = escape(plain(data.get("caption")))
+        return (f'<figure><img src="{escape(url)}" alt="{cap}" loading="lazy">'
+                f'{f"<figcaption>{cap}</figcaption>" if cap else ""}</figure>')
+    if t in ("video", "embed"):
         yt = b.get("_yt")
-        url = media_url(b)
         if yt:
             start, end = yt["range"] or (0, None)
-            st.video(f"https://www.youtube.com/watch?v={yt['id']}", start_time=start, end_time=end)
-        elif t == "video" and url:
-            st.video(url)
-        elif url:
-            st.markdown(f"🔗 [{_escape(plain(data.get('caption')) or url)}]({url})")
-    elif t == "bookmark":
-        url = data.get("url")
+            return youtube_iframe(yt["id"], start, end)
+        url = _safe_href(media_url(b))
+        if t == "video" and url:
+            return f'<video src="{escape(url)}" controls preload="metadata"></video>'
         if url:
-            st.markdown(f"🔗 [{_escape(plain(data.get('caption')) or url)}]({url})")
-    elif t in ("column_list", "column", "synced_block"):
-        render_blocks(children)
-    # 그 외 블록(표, 코드, 하위 페이지 등)은 건너뜀 (FR-004)
+            return f'<p><a href="{escape(url)}" target="_blank" rel="noopener">🔗 {escape(plain(data.get("caption")) or url)}</a></p>'
+        return ""
+    if t == "bookmark":
+        url = _safe_href(data.get("url"))
+        return f'<p><a href="{escape(url)}" target="_blank" rel="noopener">🔗 {escape(plain(data.get("caption")) or url)}</a></p>' if url else ""
+    if t in ("column_list", "column", "synced_block"):
+        return kids
+    return ""  # 그 외 블록(표, 코드, 하위 페이지 등)은 건너뜀 (FR-004)
 
 
-def render_segment(units: list, seg) -> None:
+def segment_html(units: list, seg) -> str:
     """회차의 한 구간. 영상·강의는 이번 회차에 볼 범위만, 글은 블록 그대로."""
     u = units[seg.unit]
-    partial = seg.start > 0 or seg.end < u.seconds
     if u.kind == "video":
         base = (u.youtube["range"] or (0, None))[0]
-        start, end = base + seg.start, base + seg.end
         whole_end = u.youtube["range"] is None and seg.end >= u.seconds
-        st.video(f"https://www.youtube.com/watch?v={u.youtube['id']}", start_time=int(start),
-                 end_time=None if whole_end else int(end))
-    elif u.kind == "lecture":
+        return youtube_iframe(u.youtube["id"], base + seg.start, None if whole_end else base + seg.end)
+    if u.kind == "lecture":
+        partial = seg.start > 0 or seg.end < u.seconds
         if partial:
-            span = f"{'처음' if seg.start == 0 else fmt_clock(seg.start)} ~ {'끝' if seg.end >= u.seconds else fmt_clock(seg.end) + ' 지점까지'}"
+            span = (f"{'처음' if seg.start == 0 else fmt_clock(seg.start)} ~ "
+                    f"{'끝' if seg.end >= u.seconds else fmt_clock(seg.end) + ' 지점까지'}")
         else:
             span = f"전체 {fmt_clock(u.seconds)}"
-        st.html(
-            f'<div class="wg-lecture"><div class="wg-lecture__title">{html.escape(u.title)}</div>'
-            f'<div class="wg-lecture__span">{span}</div></div>'
-        )
-    else:
-        render_blocks(u.blocks)
+        return (f'<div class="lecture"><div class="lecture__title">{escape(u.title)}</div>'
+                f'<div class="lecture__span">{span}</div></div>')
+    return blocks_html(u.blocks)

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block body_class %}has-cta{% endblock %}
+{% block content %}
+<div class="topbar">
+  {% if editing %}<a class="btn btn--tertiary" href="{{ url_for('season_home', sid=s.row.id) }}">‹ 시즌 홈</a>{% else %}<a class="btn btn--tertiary" href="{{ url_for('library') }}">‹ 서재</a>{% endif %}
+  <span></span>
+</div>
+
+<h1 class="t-title">목표를 정하고, 해낸 나에게 줄<br>선물도 골라봐요!</h1>
+
+<form id="goal" class="section" method="post" action="{{ url_for('save_goal', sid=s.row.id) }}"
+      data-previews='{{ previews|tojson }}' data-preview-url="{{ url_for('preview', sid=s.row.id) }}"
+      data-letters='{{ letters|tojson }}'>
+
+  {# 1순위: 하루 시간 선택 #}
+  <fieldset class="group" style="border:0;padding:0;margin:0">
+    <legend class="t-sub" style="margin-bottom: var(--gap-in)">하루에 얼마나 볼까요?</legend>
+    <div class="chips">
+      {% for m in choices %}
+      <label class="chip"><input type="radio" name="minutes_choice" value="{{ m }}" {{ 'checked' if minutes == m }}><span>{{ m }}분</span></label>
+      {% endfor %}
+      <label class="chip"><input type="radio" name="minutes_choice" value="custom" {{ 'checked' if minutes not in choices }}><span>직접 입력</span></label>
+    </div>
+    <input class="input" type="number" name="custom_minutes" min="5" max="180" step="5" value="{{ minutes }}"
+           aria-label="직접 입력(분)" {{ '' if minutes not in choices else 'hidden' }}>
+    <input type="hidden" name="minutes" value="{{ minutes }}">
+  </fieldset>
+
+  {# 2순위: 결과 미리보기 #}
+  <div class="box" aria-live="polite">
+    <span class="box__label">목표</span>
+    <p class="t-key"><span data-season>{{ s.row.title }}</span> · <span data-total>{{ previews[minutes].total }}</span>화 완결</p>
+    <p class="t-meta" data-points></p>
+  </div>
+
+  {# 3순위: 선물 설정 #}
+  <div class="section" data-mid-letters></div>
+
+  <div class="group">
+    <p class="t-sub">완결 선물 · <span data-last>{{ previews[minutes].points[-1] }}</span>화</p>
+    <div class="choice-cards">
+      <label class="choice-card"><input type="radio" name="final_kind" value="letter_final" {{ 'checked' if final_kind == 'letter_final' }}><span>편지로 대신하기 · 무료</span></label>
+      <label class="choice-card"><input type="radio" name="final_kind" value="gifticon" {{ 'checked' if final_kind == 'gifticon' }}><span>기프티콘 고르기</span></label>
+    </div>
+    <textarea class="textarea" name="letter_final" maxlength="500" placeholder="완결한 나에게 편지 쓰기…" {{ '' if final_kind == 'letter_final' else 'hidden' }}>{{ letters.get(previews[minutes].points[-1], '') }}</textarea>
+    {% if final_kind == 'gifticon' and gift_item %}<p class="t-meta">고른 선물: {{ gift_item }} · 결제 기능은 아직 준비 중이에요</p>{% endif %}
+  </div>
+
+  {# 4순위 #}
+  <button class="btn btn--tertiary" type="submit" name="action" value="skip" formnovalidate style="align-self:flex-start">다음에 정할게요</button>
+</form>
+{% endblock %}
+{% block cta %}
+<div class="cta-bar"><button class="btn btn--primary" type="submit" form="goal" name="action" value="save">이대로 약속하기</button></div>
+{% endblock %}

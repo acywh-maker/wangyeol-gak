@@ -1,7 +1,9 @@
-"""저장소 (PRD 11장). 구글 시트 연결 전까지 로컬 JSON 파일에 같은 탭 구조로 저장한다.
+"""저장소 (PRD 11장). 행은 시트 한 줄과 같은 dict이며, 위치(position)처럼 구조가 있는 값은 JSON 문자열로 넣는다.
 
-나중에 구글 시트로 바꿀 때는 이 모듈의 _load/_save(또는 각 함수)만 교체하면 된다.
-행은 시트 한 줄과 같은 dict이며, 위치(position)처럼 구조가 있는 값은 JSON 문자열로 넣는다.
+백엔드:
+- SHEET_ID + GCP_SERVICE_ACCOUNT_JSON 환경변수가 있으면 구글 시트 (wangyeol/sheets.py)
+- 없으면 로컬 JSON 파일 (개발·테스트용, data/store.json 또는 WG_STORE)
+요청마다 reset_cache()를 부르면, 그 요청 동안은 한 번 읽은 데이터를 다시 쓴다 (시트 API 호출 절약).
 """
 from __future__ import annotations
 
@@ -11,31 +13,78 @@ import threading
 import uuid
 from pathlib import Path
 
+from . import config
+
 TABLES = ("users", "progress", "completions", "lines", "predictions", "gifts", "events")
-_LOCK = threading.Lock()
-_PATH = Path(os.environ.get("WG_STORE", Path(__file__).resolve().parent.parent / "data" / "store.json"))
+_LOCK = threading.RLock()
+# Vercel은 /tmp만 쓸 수 있다 (재시작하면 지워짐 — 실제 운영은 구글 시트)
+_DEFAULT_JSON = Path("/tmp/wangyeol-store.json") if os.environ.get("VERCEL") else config.ROOT / "data" / "store.json"
+_PATH = Path(os.environ.get("WG_STORE", _DEFAULT_JSON))
+_backend = None
+_cache: dict | None = None
+
+
+class JsonBackend:
+    def __init__(self, path: Path):
+        self.path = path
+
+    def load(self) -> dict:
+        if not self.path.exists():
+            return {t: [] for t in TABLES}
+        data = json.loads(self.path.read_text(encoding="utf-8"))
+        for t in TABLES:
+            data.setdefault(t, [])
+        return data
+
+    def save(self, data: dict, table: str) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        tmp.replace(self.path)
+
+    def append(self, table: str, row: dict) -> None:
+        self.save(_cache, table)
+
+
+def set_backend(backend) -> None:
+    """테스트용: 백엔드를 직접 지정."""
+    global _backend, _cache
+    _backend, _cache = backend, None
 
 
 def set_path(path: str | Path) -> None:
-    """테스트용 저장 위치 변경."""
-    global _PATH
-    _PATH = Path(path)
+    """테스트용: 로컬 JSON 저장 위치 변경."""
+    set_backend(JsonBackend(Path(path)))
+
+
+def backend():
+    global _backend
+    if _backend is None:
+        sheet_id, sa = config.get("SHEET_ID"), config.get("GCP_SERVICE_ACCOUNT_JSON")
+        if sheet_id and sa:
+            from .sheets import SheetsBackend
+            _backend = SheetsBackend.from_env(sheet_id, sa)
+        else:
+            _backend = JsonBackend(_PATH)
+    return _backend
+
+
+def reset_cache() -> None:
+    """요청 시작마다 호출 — 다른 사용자가 쓴 최신 값을 다시 읽게 한다."""
+    global _cache
+    with _LOCK:
+        _cache = None
 
 
 def _load() -> dict:
-    if not _PATH.exists():
-        return {t: [] for t in TABLES}
-    data = json.loads(_PATH.read_text(encoding="utf-8"))
-    for t in TABLES:
-        data.setdefault(t, [])
-    return data
+    global _cache
+    if _cache is None:
+        _cache = backend().load()
+    return _cache
 
 
-def _save(data: dict) -> None:
-    _PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = _PATH.with_suffix(".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(_PATH)
+def _save(data: dict, table: str) -> None:
+    backend().save(data, table)
 
 
 def _rows(table: str, **where) -> list[dict]:
@@ -49,11 +98,11 @@ def _upsert(table: str, keys: dict, values: dict) -> dict:
         for r in data[table]:
             if all(r.get(k) == v for k, v in keys.items()):
                 r.update(values)
-                _save(data)
+                _save(data, table)
                 return r
         row = {**keys, **values}
         data[table].append(row)
-        _save(data)
+        _save(data, table)
         return row
 
 
@@ -61,7 +110,7 @@ def _append(table: str, row: dict) -> dict:
     with _LOCK:
         data = _load()
         data[table].append(row)
-        _save(data)
+        backend().append(table, row)
         return row
 
 
@@ -144,7 +193,7 @@ def add_completion(user_id: str, season_id: str, ep_index: int, start, end, est_
         data["completions"].append({"user_id": user_id, "season_id": season_id, "ep_index": ep_index,
                                     "start_pos": pos_key(start), "end_pos": pos_key(end),
                                     "est_min": est_min, "completed_at": now})
-        _save(data)
+        _save(data, "completions")
         return True
 
 

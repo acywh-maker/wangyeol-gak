@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar"><a class="btn btn--tertiary" href="{{ url_for('goal', sid=s.row.id) }}">‹ 목표와 선물</a><span></span></div>
+<h1 class="t-title">완결 선물 고르기</h1>
+
+{% if picked %}
+<div class="box" role="status">
+  <p class="t-key">선물이 선택됐어요</p>
+  <p class="t-body">{{ picked }} · {{ s.points[-1] }}화 완결 때 도착해요. 결제 기능은 아직 준비 중이에요. 관심 가져 주셔서 고마워요!</p>
+</div>
+<a class="btn btn--primary btn--block" href="{{ url_for('season_home', sid=s.row.id) }}">확인</a>
+{% else %}
+<nav class="tabs">
+  {% for t in tabs %}<a class="btn btn--secondary" aria-pressed="{{ 'true' if t == tab else 'false' }}" href="{{ url_for('gift', sid=s.row.id, tab=t) }}">{{ t }}</a>{% endfor %}
+</nav>
+<form class="gift-grid" method="post" action="{{ url_for('gift', sid=s.row.id, tab=tab) }}">
+  {% for item in items %}
+  <button class="gift" type="submit" name="item" value="{{ item }}"><span class="gift__img" aria-hidden="true"></span>{{ item }}</button>
+  {% endfor %}
+</form>
+{% endif %}
+{% endblock %}

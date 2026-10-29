@@ -1,522 +1,362 @@
-"""완결각 — Streamlit 진입점.
+"""완결각 — Flask 웹앱 (Vercel 배포용).
 
-흐름: S1 입장 → S2 서재 → (S6 목표·선물·가용시간) → S2-b 시즌 홈 → S4 회차 → S5 완료 → (S5-b/S5-c 선물)
-카카오페이지 레퍼런스에서 가져온 것: 시즌 홈의 회차 목록, 하단 고정 '이어보기 · n화', 뷰어식 회차 첫머리.
+흐름: S1 입장 → S2 서재 → (S6 목표·선물·가용시간 → S6-b) → S2-b 시즌 홈 → S4 회차 → S5 완료 → (S5-b/S5-c 선물)
+로컬 실행:  python app.py   (http://localhost:8510)
 """
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
-from html import escape
+from functools import wraps
 
-import streamlit as st
+from flask import Flask, abort, g, jsonify, redirect, render_template, request, session, url_for
+from markupsafe import Markup
 
-import ds
-from wangyeol import auth, notion, rules, service, store, text
-from wangyeol.render import md, render_segment, show
+from wangyeol import auth, config, notion, rules, service, store, text
+from wangyeol.render import rich, segment_html
 
-st.set_page_config(page_title="완결각", page_icon="📖", layout="centered")
-ds.apply()
+app = Flask(__name__, static_folder="static", template_folder="templates")
+app.secret_key = config.get("SECRET_KEY") or "dev-only-secret"
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                  SESSION_COOKIE_SECURE=not config.dev_mode())
 
-LOAD_ERROR = "노트를 불러오지 못했어요. 잠시 후 다시 시도해 주세요"
+COOKIE = auth.COOKIE
+DEFAULT_THEME = "dark"  # FR-015
 MINUTE_CHOICES = [5, 10, 20, 30, 60]
 GIFT_ITEMS = {  # FR-010: 일반 상품명 + (예시), 가격 없음
     "커피": ["아메리카노 (예시)", "카페라테 (예시)", "바닐라라테 (예시)", "콜드브루 (예시)"],
     "디저트": ["조각 케이크 (예시)", "마카롱 세트 (예시)", "쿠키 세트 (예시)", "크로플 (예시)"],
 }
+STATUS_ORDER = {"arrived": 0, "waiting": 1, "new": 2, "done": 3}  # 서재: 오늘 볼 시즌이 맨 위 (1순위)
 
-ss = st.session_state
-ss.setdefault("screen", "library")
-ss.setdefault("time_offset_h", 0)
-DEV = bool(st.secrets.get("DEV_MODE")) and st.query_params.get("dev") == "1"
-if not DEV:
-    st.html('<style>header[data-testid="stHeader"] { display: none; }</style>')
+
+# ---------- 공통 ----------
+
+@app.before_request
+def load_user():
+    store.reset_cache()
+    g.user = auth.user_from_token(request.cookies.get(COOKIE))
+
+
+@app.context_processor
+def inject():
+    theme = (g.get("user") or {}).get("theme") or DEFAULT_THEME
+    return {"theme": theme, "user": g.get("user"), "dev": config.dev_mode(), "now": now()}
 
 
 def now():
-    return rules.now_kst(timedelta(hours=ss.time_offset_h))
-
-
-def go(screen: str, **kw) -> None:
-    ss.screen = screen
-    ss.update(kw)
-    st.rerun()
+    offset = session.get("time_offset_h", 0) if config.dev_mode() else 0
+    return rules.now_kst(timedelta(hours=offset))
 
 
 def log(event: str, season_id: str = "", ep_index: int | None = None, meta: dict | None = None) -> None:
-    store.log_event(now().isoformat(), ss.user["user_id"], event, season_id, ep_index, meta)
+    if g.get("user"):
+        store.log_event(now().isoformat(), g.user["user_id"], event, season_id, ep_index, meta)
 
 
-def load_error(e: Exception) -> None:
-    st.error(LOAD_ERROR)
-    if DEV:
-        st.caption(f"개발용 상세: {e}")
-    if st.button("다시 시도"):
-        notion.clear_cache()
-        st.rerun()
+def login_required(view):
+    @wraps(view)
+    def wrapper(*a, **kw):
+        if not g.user:
+            return redirect(url_for("enter"))
+        return view(*a, **kw)
+    return wrapper
 
 
-DEFAULT_THEME = "dark"  # FR-015: 다크가 기본
+def safe_next(default: str = "/") -> str:
+    nxt = request.form.get("next") or request.args.get("next") or default
+    return nxt if nxt.startswith("/") and not nxt.startswith("//") else default
 
 
-def theme() -> str:
-    return (ss.get("user") or {}).get("theme") or DEFAULT_THEME
+def rows_for_user() -> list[dict]:
+    return notion.seasons_for(g.user["nickname"])
 
 
-def theme_toggle() -> None:
-    """라이트/다크 전환. 사용자별로 저장된다."""
-    dark = theme() == "dark"
-    if st.button("☀️ 라이트 모드" if dark else "🌙 다크 모드", type="tertiary", key="theme-toggle"):
-        new = "light" if dark else "dark"
-        store.set_theme(ss.user["user_id"], new)
-        ss.user = {**ss.user, "theme": new}
-        log("theme_change", meta={"theme": new})
-        st.rerun()
+def state_for(season_id: str) -> service.SeasonState:
+    row = next((r for r in rows_for_user() if r["id"] == season_id), None)
+    if not row:
+        abort(404)
+    return service.load_state(g.user["user_id"], row, now())
 
 
-def top_bar(back_label: str | None = None, back_screen: str | None = None) -> None:
-    """화면 맨 위: 왼쪽 뒤로 가기, 오른쪽 테마 토글."""
-    with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center", key="wg-topbar"):
-        if back_label:
-            if st.button(f"‹ {back_label}", type="tertiary", key=f"back-{back_screen}"):
-                go(back_screen)
-        else:
-            st.html("<span></span>")
-        theme_toggle()
+def episode_or_404(s: service.SeasonState, n: int):
+    if not s.episodes:
+        abort(404)
+    return s.episodes[max(1, min(n, s.total)) - 1]  # 회차가 줄면 마지막 회차로 보정 (13장)
 
 
-def back(label: str, screen: str) -> None:
-    if st.button(f"‹ {label}", type="tertiary", key=f"back-{screen}"):
-        go(screen)
+@app.errorhandler(notion.NotionError)
+def notion_failed(e):
+    return render_template("error.html", detail=str(e) if config.dev_mode() else ""), 503
 
 
-def badge(kind: str, label: str) -> str:
-    return f'<span class="wg-badge wg-badge--{kind}">{escape(label)}</span>'
-
-
-def state_for(season_id: str) -> service.SeasonState | None:
-    row = next((r for r in notion.seasons_for(ss.user["nickname"]) if r["id"] == season_id), None)
-    return service.load_state(ss.user["user_id"], row, now()) if row else None
-
-
-def enter_season(state: service.SeasonState) -> None:
-    """시즌 진입 판단: 처음이면 S6, 아니면 시즌 홈. (3일 이상 쉬었을 때 S3는 Day 3)"""
-    if not state.started:
-        log("gift_setup_view", state.row["id"])
-        go("goal", season_id=state.row["id"], goal_edit=False)
-    log("season_view", state.row["id"])
-    go("home", season_id=state.row["id"])
-
-
-def open_episode(state: service.SeasonState, index: int) -> None:
-    go("episode", season_id=state.row["id"], ep_index=index)
+@app.template_filter("eul")
+def eul_filter(word):
+    return text.eul(word)
 
 
 # ---------- S1 입장 ----------
 
-def entry() -> None:
-    st.html('<div class="wg-hero"><div class="wg-hero__title">완결각</div>'
-            '<div class="wg-hero__sub">쌓아 둔 노트를 웹소설처럼 하루 한 화씩</div></div>')
-    # 폼: 입력값과 버튼이 한 번에 제출되도록 (모바일에서 마지막 입력이 누락되지 않게)
-    with st.form("entry", border=False):
-        nickname = st.text_input("닉네임 (2~12자)", max_chars=12)
-        pin = st.text_input("PIN 4자리", type="password", max_chars=4)
-        st.caption("처음이면 자동으로 가입돼요")
-        with st.container(key="ds-cta"):
-            submit = st.form_submit_button("시작하기", type="primary", width="stretch")
-    if submit:
-        err = auth.validate(nickname.strip(), pin)
-        user = None
-        if not err:
-            user, err, is_new = auth.enter(nickname, pin, now().isoformat())
-        if err:
-            st.error(err)
-            return
-        ss.user = user
-        ss.pending_cookie = auth.issue_token(user["user_id"])
-        log("signup" if is_new else "login")
-        go("library")
+@app.route("/enter", methods=["GET", "POST"])
+def enter():
+    error, nickname = None, ""
+    if request.method == "POST":
+        nickname, pin = request.form.get("nickname", "").strip(), request.form.get("pin", "")
+        error = auth.validate(nickname, pin)
+        if not error:
+            user, error, is_new = auth.enter(nickname, pin, now().isoformat())
+            if user:
+                g.user = user
+                log("signup" if is_new else "login")
+                resp = redirect(url_for("library"))
+                resp.set_cookie(COOKIE, auth.issue_token(user["user_id"]), max_age=auth.COOKIE_DAYS * 86400,
+                                httponly=True, samesite="Lax", secure=not config.dev_mode())
+                return resp
+    return render_template("entry.html", error=error, nickname=nickname)
 
 
-# ---------- S2 내 서재 ----------
+@app.post("/logout")
+@login_required
+def logout():
+    auth.logout(g.user["user_id"])
+    resp = redirect(url_for("enter"))
+    resp.delete_cookie(COOKIE)
+    return resp
 
-def library() -> None:
-    try:
-        rows = notion.seasons_for(ss.user["nickname"])
-        states = [service.load_state(ss.user["user_id"], r, now()) for r in rows]
-    except notion.NotionError as e:
-        load_error(e)
-        return
-    top_bar()
-    st.html(f'<div class="wg-title">{escape(ss.user["nickname"])}님의 서재</div>'
-            f'<div class="wg-stat">지금까지 끝낸 회차 {store.total_completed(ss.user["user_id"])}개</div>')
-    if not states:
-        st.info("아직 서재에 시즌이 없어요.")
-    for s in states:
-        kind, label = s.status
-        progress = f"{len(s.done)}/{s.total}화" if s.started else f"{s.total}화"
-        with st.container(key=f"wg-card-{s.row['id']}"):
-            done_cls = " wg-card--done" if kind == "done" else ""
-            st.html(f'<div class="wg-card-title{done_cls}">{escape(s.row["title"])}</div>'
-                    f'<div class="wg-card-meta">{badge(kind, label)}<span>{progress}</span></div>')
-            if st.button(s.row["title"], key=f"open-{s.row['id']}", width="stretch"):
-                enter_season(s)
 
-    if st.button("로그아웃", type="tertiary"):
-        auth.logout(ss.user["user_id"])
-        ss.clear()
-        ss.pending_cookie = ""
-        st.rerun()
+@app.post("/theme")
+@login_required
+def toggle_theme():
+    new = "light" if (g.user.get("theme") or DEFAULT_THEME) == "dark" else "dark"
+    store.set_theme(g.user["user_id"], new)
+    log("theme_change", meta={"theme": new})
+    return redirect(safe_next())
 
-    recent = service.most_recent(ss.user["user_id"], states)
-    if recent and recent.next_ep:
-        with st.container(key="ds-cta"):
-            title = recent.row["title"] if len(recent.row["title"]) <= 14 else recent.row["title"][:13] + "…"
-            if st.button(f"이어보기 · {title} {recent.current_ep}화", type="primary", width="stretch"):
-                open_episode(recent, recent.current_ep)
+
+# ---------- S2 서재 ----------
+
+@app.get("/")
+@login_required
+def library():
+    rows = rows_for_user()
+    uid, t = g.user["user_id"], now()  # 작업 스레드에서는 요청 정보(g, session)를 못 보므로 미리 꺼낸다
+    store._load()  # 저장소도 요청 캐시에 미리 채워 둔다
+    with ThreadPoolExecutor(max_workers=6) as pool:  # 시즌별 노션 읽기를 동시에
+        states = list(pool.map(lambda r: service.load_state(uid, r, t), rows))
+    states.sort(key=lambda s: STATUS_ORDER.get(s.status[0], 9))
+    recent = service.most_recent(g.user["user_id"], states)
+    return render_template("library.html", states=states, recent=recent,
+                           total_done=store.total_completed(g.user["user_id"]))
 
 
 # ---------- S2-b 시즌 홈 ----------
 
-def home() -> None:
-    try:
-        s = state_for(ss.get("season_id", ""))
-    except notion.NotionError as e:
-        load_error(e)
-        return
-    if not s:
-        go("library")
-    top_bar("서재", "library")
-    st.html(f'<div class="wg-title">{escape(s.row["title"])}</div>'
-            f'<div class="wg-meta">하루 {s.minutes}분 · {len(s.done)}/{s.total}화</div>')
-    if st.button("목표·선물 바꾸기", type="tertiary"):
-        go("goal", goal_edit=True)
-
+@app.get("/s/<sid>")
+@login_required
+def season_home(sid):
+    s = state_for(sid)
+    if not s.started:  # 처음이면 목표·선물부터 (S6)
+        log("gift_setup_view", sid)
+        return redirect(url_for("goal", sid=sid))
+    log("season_view", sid)
     t = now()
     gifts = {p: ("완결 선물" if p == s.points[-1] else "중간 선물") for p in s.points}
-    for ep in s.episodes:
-        done = ep.index in s.done
-        tags = []
-        if done:
-            tags.append(badge("done-ep", "✓ 끝냄"))
-        elif ep.index == s.current_ep and not s.finished:
-            if s.is_arrived(t):
-                tags.append(badge("arrived", "오늘의 화 도착"))
-            else:
-                tags.append(badge("waiting", rules.arrival_text(t, s.arrival())))
-        if ep.index in gifts:
-            tags.append(badge("gift", f"◆ {gifts[ep.index]}"))
-        cls = "wg-ep wg-ep--done" if done else ("wg-ep wg-ep--current" if ep.index == s.current_ep else "wg-ep")
-        with st.container(key=f"wg-row-{ep.index}"):
-            st.html(f'<div class="{cls}"><div class="wg-ep__no">{ep.index}화 · 약 {ep.minutes}분</div>'
-                    f'<div class="wg-ep__title">{escape(ep.title)}</div>'
-                    f'<div class="wg-ep__tags">{"".join(tags)}</div></div>')
-            if st.button(f"{ep.index}화 {ep.title}", key=f"ep-{ep.index}", width="stretch"):
-                open_episode(s, ep.index)
-
-    if not s.finished and s.next_ep:
-        with st.container(key="ds-cta"):
-            label = "첫 화 보기" if not s.done else f"이어보기 · {s.current_ep}화"
-            if st.button(label, type="primary", width="stretch"):
-                open_episode(s, s.current_ep)
+    nxt = rules.next_gift(s.points, max(s.done, default=0))
+    return render_template("home.html", s=s, gifts=gifts, next_gift=nxt, arrived=s.is_arrived(t),
+                           arrival_text=rules.arrival_text(t, s.arrival()) if s.arrival() else "")
 
 
 # ---------- S6 목표와 선물 / S6-b 선물 고르기 ----------
 
-def goal() -> None:
-    try:
-        s = state_for(ss.get("season_id", ""))
-    except notion.NotionError as e:
-        load_error(e)
-        return
-    if not s:
-        go("library")
-    uid, sid = ss.user["user_id"], s.row["id"]
-    draft = ss.setdefault("goal_draft", {})
-    if draft.get("season_id") != sid:
-        saved = store.get_gifts(uid, sid)
-        final = next((g for g in saved.values() if g["kind"] in ("gifticon", "letter_final")), None)
-        draft.clear()
-        draft.update(season_id=sid, minutes=s.minutes, final_kind=(final or {}).get("kind", ""),
-                     gift_item=(final or {}).get("gift_item", ""),
-                     letters={k: g["letter_text"] for k, g in saved.items() if g["kind"] in ("letter", "letter_final")})
+@app.get("/s/<sid>/goal")
+@login_required
+def goal(sid):
+    s = state_for(sid)
+    saved = store.get_gifts(g.user["user_id"], sid)
+    final = next((x for x in saved.values() if x["kind"] in ("gifticon", "letter_final")), None)
+    previews = {m: service.preview(s.season, m) for m in MINUTE_CHOICES}
+    if s.minutes not in previews:
+        previews[s.minutes] = service.preview(s.season, s.minutes)
+    letters = {k: x["letter_text"] for k, x in saved.items() if x["kind"] in ("letter", "letter_final")}
+    return render_template("goal.html", s=s, choices=MINUTE_CHOICES, minutes=s.minutes,
+                           previews={m: {"total": t, "points": p} for m, (t, p) in previews.items()},
+                           letters=letters, final_kind=(final or {}).get("kind", ""),
+                           gift_item=(final or {}).get("gift_item", ""), editing=s.started)
 
-    if ss.get("goal_edit"):
-        back("시즌 홈", "home")
-    st.html('<div class="wg-title">목표를 정하고, 해낸 나에게 줄<br>선물도 골라봐요!</div>')
 
-    st.html('<div class="wg-label">하루에 얼마나 볼까요?</div>')
-    options = [f"{m}분" for m in MINUTE_CHOICES] + ["직접 입력"]
-    current = f"{draft['minutes']}분" if draft["minutes"] in MINUTE_CHOICES else "직접 입력"
-    pick = st.pills("하루 가용시간", options, default=current, label_visibility="collapsed", key="goal-minutes")
-    if pick == "직접 입력":
-        draft["minutes"] = int(st.number_input("분", min_value=5, max_value=180, step=5,
-                                               value=max(5, min(180, draft["minutes"]))))
-    elif pick:
-        draft["minutes"] = int(pick.removesuffix("분"))
+@app.get("/s/<sid>/preview")
+@login_required
+def preview(sid):
+    minutes = max(5, min(180, request.args.get("minutes", type=int) or service.DEFAULT_MINUTES))
+    total, points = service.preview(state_for(sid).season, minutes)
+    return jsonify(total=total, points=points)
 
-    total, points = service.preview(s.season, draft["minutes"])
-    marks = " · ".join(f"◆ {p}화 {'완결' if p == points[-1] else '중간'} 선물" for p in points)
-    st.html(f'<div class="wg-goal"><div class="wg-label">목표</div>'
-            f'<div class="wg-goal__main">{escape(s.row["title"])} · {total}화 완결</div>'
-            f'<div class="wg-meta">하루 {draft["minutes"]}분이면 {total}화 · {marks}</div></div>')
 
-    for p in points[:-1]:
-        st.html(f'<div class="wg-label">중간 선물 · {p}화</div>')
-        draft["letters"][p] = st.text_area(f"{p}화까지 온 나에게 편지 쓰기", value=draft["letters"].get(p, ""),
-                                           max_chars=500, key=f"letter-{p}", label_visibility="collapsed",
-                                           placeholder=f"{p}화까지 온 나에게 편지 쓰기…")
-
-    last = points[-1]
-    st.html(f'<div class="wg-label">완결 선물 · {last}화</div>')
-    with st.container(horizontal=True, key="ds-row-final"):
-        for kind, label in (("letter_final", "편지로 대신하기 · 무료"), ("gifticon", "기프티콘 고르기")):
-            mark = "✓ " if draft["final_kind"] == kind else ""
-            if st.button(mark + label, key=f"final-{kind}", width="stretch"):
-                draft["final_kind"] = kind
-                if kind == "gifticon":
-                    go("gift")
-                st.rerun()
-    if draft["final_kind"] == "letter_final":
-        draft["letters"][last] = st.text_area("완결한 나에게 편지 쓰기", value=draft["letters"].get(last, ""),
-                                              max_chars=500, key=f"letter-{last}", label_visibility="collapsed",
-                                              placeholder="완결한 나에게 편지 쓰기…")
-    elif draft["final_kind"] == "gifticon" and draft["gift_item"]:
-        st.caption(f"고른 선물: {draft['gift_item']} · 결제 기능은 아직 준비 중이에요")
-
-    # 처음: 저장 없이 시작(10분) / 수정 중: 바꾸지 않고 시즌 홈으로
-    if st.button("다음에 정할게요", type="tertiary"):
-        if not ss.get("goal_edit"):
+@app.post("/s/<sid>/goal")
+@login_required
+def save_goal(sid):
+    s = state_for(sid)
+    uid, ts = g.user["user_id"], now().isoformat()
+    if request.form.get("action") == "skip":  # "다음에 정할게요"
+        if not s.started:
             service.start_or_update(uid, s, service.DEFAULT_MINUTES, now())
             log("gift_skip", sid)
-        ss.pop("goal_draft", None)
-        go("home")
+        return redirect(url_for("season_home", sid=sid))
+    minutes = max(5, min(180, request.form.get("minutes", type=int) or service.DEFAULT_MINUTES))
+    service.start_or_update(uid, s, minutes, now())
+    _, points = service.preview(s.season, minutes)
+    for p in points[:-1]:
+        letter = request.form.get(f"letter_{p}", "").strip()[:500]
+        if letter:
+            store.save_gift(uid, sid, p, "letter", letter_text=letter, now=ts)
+    final_kind = request.form.get("final_kind", "")
+    if final_kind == "letter_final":
+        store.save_gift(uid, sid, points[-1], "letter_final",
+                        letter_text=request.form.get("letter_final", "").strip()[:500], now=ts)
+    log("gift_set", sid, meta={"minutes": minutes, "final": final_kind})
+    if final_kind == "gifticon":
+        return redirect(url_for("gift", sid=sid))
+    return redirect(url_for("season_home", sid=sid))
 
-    with st.container(key="ds-cta"):
-        if st.button("이대로 약속하기", type="primary", width="stretch"):
-            service.start_or_update(uid, s, draft["minutes"], now())
-            ts = now().isoformat()
-            for p in points[:-1]:
-                if draft["letters"].get(p, "").strip():
-                    store.save_gift(uid, sid, p, "letter", letter_text=draft["letters"][p].strip(), now=ts)
-            if draft["final_kind"] == "letter_final":
-                store.save_gift(uid, sid, last, "letter_final", letter_text=draft["letters"].get(last, "").strip(), now=ts)
-            elif draft["final_kind"] == "gifticon":
-                store.save_gift(uid, sid, last, "gifticon", gift_item=draft["gift_item"], now=ts)
-            log("gift_set", sid, meta={"minutes": draft["minutes"], "final": draft["final_kind"]})
-            ss.pop("goal_draft", None)
-            go("home")
 
-
-def gift() -> None:
-    draft = ss.get("goal_draft") or {}
-    back("목표와 선물", "goal")
-    st.html('<div class="wg-title">완결 선물 고르기</div>')
-    tab = st.pills("종류", list(GIFT_ITEMS), default="커피", label_visibility="collapsed", key="gift-tab") or "커피"
-    items = GIFT_ITEMS[tab]
-    for row in (items[:2], items[2:]):
-        with st.container(horizontal=True, key=f"ds-row-gift-{row[0]}"):
-            for item in row:
-                with st.container(key=f"wg-gift-{item}"):
-                    st.html('<div class="wg-gift__img"></div>')
-                    if st.button(item, key=f"pick-{item}", width="stretch"):
-                        draft["gift_item"] = item
-                        log("gift_select", draft.get("season_id", ""), meta={"item": item})
-                        ss.gift_picked = item
-                        st.rerun()
-    if ss.get("gift_picked"):
-        total, points = service.preview(state_for(draft["season_id"]).season, draft.get("minutes", service.DEFAULT_MINUTES))
-        st.html(f'<div class="wg-notice"><div class="wg-notice__title">선물이 선택됐어요</div>'
-                f'<div>{escape(ss.gift_picked)} · {points[-1]}화 완결 때 도착해요. '
-                f'결제 기능은 아직 준비 중이에요. 관심 가져 주셔서 고마워요!</div></div>')
-        if st.button("확인", type="primary", width="stretch"):
-            ss.pop("gift_picked")
-            go("goal")
+@app.route("/s/<sid>/gift", methods=["GET", "POST"])
+@login_required
+def gift(sid):
+    s = state_for(sid)
+    tab = request.args.get("tab", "커피")
+    tab = tab if tab in GIFT_ITEMS else "커피"
+    picked = None
+    if request.method == "POST":
+        item = request.form.get("item", "")
+        if item in sum(GIFT_ITEMS.values(), []):
+            store.save_gift(g.user["user_id"], sid, s.points[-1], "gifticon", gift_item=item, now=now().isoformat())
+            log("gift_select", sid, meta={"item": item})
+            picked = item
+    return render_template("gift.html", s=s, tabs=list(GIFT_ITEMS), tab=tab, items=GIFT_ITEMS[tab], picked=picked)
 
 
 # ---------- S4 회차 ----------
 
-def episode() -> None:
-    try:
-        s = state_for(ss.get("season_id", ""))
-    except notion.NotionError as e:
-        load_error(e)
-        return
-    if not s or not s.episodes:
-        go("library")
-    uid, sid = ss.user["user_id"], s.row["id"]
-    idx = max(1, min(ss.get("ep_index", 1), s.total))  # 회차가 줄면 마지막 회차로 보정 (13장)
-    ep = s.episodes[idx - 1]
-    units = s.season.units
+@app.get("/s/<sid>/ep/<int:n>")
+@login_required
+def episode(sid, n):
+    s = state_for(sid)
+    ep = episode_or_404(s, n)
+    uid, units = g.user["user_id"], s.season.units
+    opened = set(session.get("opened", []))
+    key = f"{sid}:{ep.index}"
+    if key not in opened:  # 이벤트는 세션당 한 번
+        log("ep_open", sid, ep.index, {"est_min": ep.minutes})
+        if ep.index > s.current_ep or (ep.index == s.current_ep and not s.is_arrived(now())):
+            log("early_open", sid, ep.index)
+        session["opened"] = list(opened | {key})[-200:]
 
-    opened = ss.setdefault("opened", set())
-    if (sid, idx) not in opened:
-        opened.add((sid, idx))
-        log("ep_open", sid, idx, {"est_min": ep.minutes})
-        if idx > s.current_ep or (idx == s.current_ep and not s.is_arrived(now())):
-            log("early_open", sid, idx)
-
-    top_bar("시즌 홈", "home")
-
-    # 1. 뷰어식 첫머리
-    st.html(f'<div class="wg-viewer-head"><div class="wg-viewer-head__no">{escape(s.row["title"])} · {idx}화</div>'
-            f'<div class="wg-viewer-head__title">{escape(ep.title)}</div>'
-            f'<div class="wg-viewer-head__min">약 {ep.minutes}분</div></div>')
-
-    # 2. 지난 화 예측 결과
-    if idx > 1:
-        prev = s.episodes[idx - 2].prediction
-        saved = store.get_prediction(uid, sid, idx - 1)
-        if prev and saved:
+    prev_result, prev_line = None, ""
+    if ep.index > 1:
+        prev = s.episodes[ep.index - 2].prediction
+        saved = store.get_prediction(uid, sid, ep.index - 1)
+        if prev and saved and saved.get("choice") is not None:
             picked = prev.choices[saved["choice"]]
-            result = f"{text.eul(picked)} 골랐어요 → "
-            result += "정답이에요!" if saved["choice"] == prev.answer_index else f"정답은 {text.ieosseoyo(prev.answer)}"
-            with st.container(key=f"wg-box-result-{idx}"):
-                st.html('<div class="wg-label">지난 화 예측 결과</div>')
-                show(md([{"plain_text": result}]))
-        # 3. 지난 화 내 한 줄 보기
-        prev_line = store.get_line(uid, sid, idx - 1)
-        if prev_line:
-            with st.expander("지난 화 내 한 줄 보기"):
-                st.write(prev_line)
+            prev_result = (f"{text.eul(picked)} 골랐어요 → "
+                           + ("정답이에요!" if saved["choice"] == prev.answer_index else f"정답은 {text.ieosseoyo(prev.answer)}"))
+        prev_line = store.get_line(uid, sid, ep.index - 1)
 
-    # 4. 1분 요약
-    if ep.summary_unit is not None:
-        with st.container(key=f"wg-summary-{idx}"):
-            st.html('<div class="wg-label">1분 요약</div>')
-            show(md(units[ep.summary_unit].blocks[0]["callout"]["rich_text"]))
-
-    # 5. 본문
-    for seg in ep.segments:
-        if seg.unit != ep.summary_unit:
-            render_segment(units, seg)
-
-    # 6. 예측 선택 (마지막 화는 planner가 이미 숨김)
-    if ep.prediction:
-        pred = ep.prediction
-        saved = store.get_prediction(uid, sid, idx)
-        with st.container(key=f"wg-box-pred-{idx}"):
-            st.html('<div class="wg-label">다음 화에서 공개 · 예측해 보세요</div>')
-            show(f"<strong>{md([{'plain_text': pred.question}])}</strong>")
-            with st.container(horizontal=True, key=f"ds-row-pred-{idx}"):  # 같은 크기·같은 스타일, 한 줄
-                for i, choice in enumerate(pred.choices):
-                    mark = "✓ " if saved and saved["choice"] == i else ""
-                    if st.button(mark + choice, key=f"pred-{idx}-{i}", width="stretch"):
-                        correct = i == pred.answer_index
-                        store.save_prediction(uid, sid, idx, i, correct, now().isoformat())
-                        log("prediction_submit", sid, idx, {"choice": choice, "is_correct": correct})
-                        st.rerun()
-
-    # 7. 오늘의 한 줄 (입력을 마치면 저장)
-    def save_line():
-        value = ss[f"line-{sid}-{idx}"].strip()
-        store.save_line(uid, sid, idx, value, now().isoformat())
-        if value:
-            log("line_submit", sid, idx)
-
-    st.text_area("오늘의 한 줄 (선택)", value=store.get_line(uid, sid, idx), max_chars=200,
-                 key=f"line-{sid}-{idx}", height=80, on_change=save_line)
-
-    # 8. 다 봤어요 — 본문 맨 아래에만 (하단 고정 바 사용 안 함)
-    if st.button("다 봤어요", type="primary", width="stretch", key="done"):
-        service.complete(uid, s, ep, now())
-        ss.balloons_shown = False
-        go("done", done_index=idx)
-
-    # 9. 원문 링크
+    summary = rich(units[ep.summary_unit].blocks[0]["callout"]["rich_text"]) if ep.summary_unit is not None else ""
+    body = "".join(segment_html(units, seg) for seg in ep.segments if seg.unit != ep.summary_unit)
+    saved_pred = store.get_prediction(uid, sid, ep.index) if ep.prediction else None
     first_blocks = units[ep.segments[0].unit].blocks
-    st.markdown(f"[노션에서 원문 보기 ↗]({s.season.block_url(first_blocks[0]['id'] if first_blocks else None)})")
+    return render_template("episode.html", s=s, ep=ep, prev_result=prev_result, prev_line=prev_line,
+                           summary=Markup(summary), body=Markup(body),
+                           chosen=(saved_pred or {}).get("choice"), line=store.get_line(uid, sid, ep.index),
+                           notion_url=s.season.block_url(first_blocks[0]["id"] if first_blocks else None))
 
-    if DEV:
-        with st.sidebar:
-            pick = st.selectbox("회차 이동", range(1, s.total + 1), index=idx - 1)
-            if pick != idx:
-                go("episode", ep_index=pick)
+
+@app.post("/s/<sid>/ep/<int:n>/predict")
+@login_required
+def predict(sid, n):
+    s = state_for(sid)
+    ep = episode_or_404(s, n)
+    choice = request.form.get("choice", type=int)
+    if ep.prediction and choice in (0, 1):
+        correct = choice == ep.prediction.answer_index
+        store.save_prediction(g.user["user_id"], sid, ep.index, choice, correct, now().isoformat())
+        log("prediction_submit", sid, ep.index, {"choice": ep.prediction.choices[choice], "is_correct": correct})
+    if request.headers.get("X-Requested-With") == "fetch":
+        return ("", 204)
+    return redirect(url_for("episode", sid=sid, n=ep.index) + "#pred")
+
+
+def _save_line(sid: str, index: int) -> None:
+    if "line" not in request.form:
+        return
+    value = request.form.get("line", "").strip()[:200]
+    if value != store.get_line(g.user["user_id"], sid, index):
+        store.save_line(g.user["user_id"], sid, index, value, now().isoformat())
+        if value:
+            log("line_submit", sid, index)
+
+
+@app.post("/s/<sid>/ep/<int:n>/line")
+@login_required
+def save_line(sid, n):
+    _save_line(sid, episode_or_404(state_for(sid), n).index)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return ("", 204)
+    return redirect(url_for("episode", sid=sid, n=n))
+
+
+@app.post("/s/<sid>/ep/<int:n>/done")
+@login_required
+def complete(sid, n):
+    s = state_for(sid)
+    ep = episode_or_404(s, n)
+    _save_line(sid, ep.index)
+    new = service.complete(g.user["user_id"], s, ep, now())
+    return redirect(url_for("done", sid=sid, n=ep.index, new=1 if new else None))
 
 
 # ---------- S5 완료 / S5-b·S5-c 선물 도착 ----------
 
-def done() -> None:
-    s = state_for(ss.get("season_id", ""))
-    if not s:
-        go("library")
-    idx = ss.get("done_index", 1)
-    if not ss.get("balloons_shown"):
-        st.balloons()
-        ss.balloons_shown = True
-    st.html(f'<div class="wg-done"><div class="wg-done__title">오늘 몫 끝!</div>'
-            f'<div class="wg-meta">지금까지 끝낸 회차 {store.total_completed(ss.user["user_id"])}개</div></div>')
-
-    nxt = rules.next_gift(s.points, idx)
-    if nxt:
-        point, left, kind = nxt
-        name = "중간 선물(편지)" if kind == "mid" else "완결 선물"
-        st.html(f'<div class="wg-label">{name}까지 {left}화 남음</div>')
-        st.progress(min(1.0, idx / point))
-
-    gift = store.get_gifts(ss.user["user_id"], s.row["id"]).get(idx) if idx in s.points else None
-    if gift:
-        if st.button("선물 확인하기", type="primary", width="stretch"):
-            go("gift_arrived")
-        return
-
-    if idx < s.total:
-        arr = s.arrival()
-        st.html(f'<div class="wg-box-plain"><div class="wg-label">다음 화</div>'
-                f'<div>{idx + 1}화는 {rules.arrival_text(now(), arr) if arr else "지금 볼 수 있어요"}</div></div>')
-    with st.container(horizontal=True, key="ds-row-done"):
-        if idx < s.total and st.button("지금 열기", width="stretch"):
-            open_episode(s, idx + 1)
-        if st.button("서재로", width="stretch"):
-            go("library")
+@app.get("/s/<sid>/done/<int:n>")
+@login_required
+def done(sid, n):
+    s = state_for(sid)
+    nxt = rules.next_gift(s.points, n)
+    gift_here = store.get_gifts(g.user["user_id"], sid).get(n) if n in s.points else None
+    arr = s.arrival()
+    return render_template("done.html", s=s, n=n, next_gift=nxt, gift_here=gift_here,
+                           arrival=rules.arrival_text(now(), arr) if arr else "",
+                           total_done=store.total_completed(g.user["user_id"]), celebrate=request.args.get("new") == "1")
 
 
-def gift_arrived() -> None:
-    s = state_for(ss.get("season_id", ""))
-    idx = ss.get("done_index", 1)
-    uid, sid = ss.user["user_id"], s.row["id"]
-    g = store.get_gifts(uid, sid).get(idx)
-    nick = escape(ss.user["nickname"])
-    if store.mark_gift_delivered(uid, sid, idx, now().isoformat()):
-        log("gift_delivered", sid, idx, {"kind": g["kind"]})
-    written = rules.parse_ts(g.get("created_at"))
-    letter = (f'<div class="wg-letter"><div class="wg-label">{written.month}월 {written.day}일의 내가 쓴 편지</div>'
-              f'<div>{escape(g.get("letter_text", "")).replace(chr(10), "<br>")}</div></div>') if written and g.get("letter_text") else ""
-    if g["kind"] == "letter":
-        st.html(f'<div class="wg-label">중간 선물 · {idx}화</div>'
-                f'<div class="wg-title">나와의 약속을 지켜낸 {nick}님 선물이 도착했어요</div>{letter}')
-    else:
-        body = (f'<div class="wg-gift-box"><div class="wg-gift__img"></div><div>{escape(g.get("gift_item", ""))}</div>'
-                f'<div class="wg-stamp">선물 도착</div></div>') if g["kind"] == "gifticon" else letter
-        st.html(f'<div class="wg-title">스스로 정한 목표를 끝까지 지킨 {nick}님.<br>정말 대단해요, 약속한 선물이에요.<br>축하드려요!</div>{body}')
-    if st.button("서재로", type="primary", width="stretch"):  # S7 완결 리포트는 Day 3
-        go("library")
+@app.get("/s/<sid>/gift-arrived/<int:n>")
+@login_required
+def gift_arrived(sid, n):
+    s = state_for(sid)
+    gft = store.get_gifts(g.user["user_id"], sid).get(n)
+    if not gft:
+        return redirect(url_for("library"))
+    if store.mark_gift_delivered(g.user["user_id"], sid, n, now().isoformat()):
+        log("gift_delivered", sid, n, {"kind": gft["kind"]})
+    written = rules.parse_ts(gft.get("created_at"))
+    return render_template("gift_arrived.html", s=s, n=n, gift=gft,
+                           written=f"{written.month}월 {written.day}일" if written else "")
 
 
 # ---------- 개발용 ----------
 
-def dev_sidebar() -> None:
-    if not DEV:
-        return
-    with st.sidebar:
-        st.caption("개발용 (?dev=1)")
-        ss.time_offset_h = st.number_input("시간 이동(시간)", min_value=0, max_value=24 * 14, step=6,
-                                           value=ss.time_offset_h)
-        st.caption(f"지금(가상): {now():%m/%d %H:%M}")
+@app.get("/dev/time")
+def dev_time():
+    if not config.dev_mode():
+        abort(404)
+    session["time_offset_h"] = request.args.get("h", type=int) or 0
+    return redirect(safe_next())
 
 
-# ---------- 라우팅 ----------
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
 
-if "user" not in ss:
-    cookie_user = auth.user_from_cookie()
-    if cookie_user:
-        ss.user = cookie_user
-        log("login", meta={"via": "cookie"})
-if "pending_cookie" in ss:
-    auth.write_cookie(ss.pop("pending_cookie") or None)
 
-if theme() == "dark":
-    st.html('<div class="wg-theme-dark"></div>')
-dev_sidebar()
-if "user" not in ss:
-    entry()
-else:
-    {"library": library, "home": home, "goal": goal, "gift": gift, "episode": episode,
-     "done": done, "gift_arrived": gift_arrived}.get(ss.screen, library)()
+if __name__ == "__main__":
+    app.run(port=8510, debug=config.dev_mode())

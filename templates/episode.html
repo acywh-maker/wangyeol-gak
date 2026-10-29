@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_macros.html" import topbar %}
+{% block title %}{{ ep.title }} · 완결각{% endblock %}
+{% block content %}
+{{ topbar(url_for('season_home', sid=s.row.id), '시즌 홈') }}
+
+{# 1. 뷰어식 첫머리 (가운데 정렬은 여기만) #}
+<header class="viewer-head">
+  <p class="t-meta">{{ s.row.title }} · {{ ep.index }}화</p>
+  <h1 class="t-title">{{ ep.title }}</h1>
+  <p class="t-meta">약 {{ ep.minutes }}분</p>
+</header>
+
+{# 2~4. 지난 화 이어 주기 + 1분 요약 #}
+{% if prev_result or prev_line or summary %}
+<div class="section">
+  {% if prev_result %}<div class="box"><span class="box__label">지난 화 예측 결과</span><p class="t-body">{{ prev_result }}</p></div>{% endif %}
+  {% if prev_line %}<details class="box"><summary class="box__label" style="cursor:pointer">지난 화 내 한 줄 보기</summary><p class="t-body">{{ prev_line }}</p></details>{% endif %}
+  {% if summary %}<div class="box"><span class="box__label">1분 요약</span><p class="t-body">{{ summary }}</p></div>{% endif %}
+</div>
+{% endif %}
+
+{# 5. 본문 (1순위) #}
+<article class="content">{{ body }}</article>
+
+{# 6~8. 참여 — 예측, 오늘의 한 줄, 다 봤어요 (본문 끝에만, 고정 바 아님) #}
+<div class="section">
+  {% if ep.prediction %}
+  <form id="pred" class="pred" method="post" action="{{ url_for('predict', sid=s.row.id, n=ep.index) }}" data-fetch>
+    <span class="box__label">다음 화에서 공개 · 예측해 보세요</span>
+    <p class="pred__q">{{ ep.prediction.question }}</p>
+    <div class="pair">
+      {% for c in ep.prediction.choices %}
+      <button class="btn btn--secondary" type="submit" name="choice" value="{{ loop.index0 }}" aria-pressed="{{ 'true' if chosen == loop.index0 else 'false' }}">{{ c }}</button>
+      {% endfor %}
+    </div>
+  </form>
+  {% endif %}
+
+  <form class="section" method="post" action="{{ url_for('complete', sid=s.row.id, n=ep.index) }}">
+    <div class="field">
+      <label for="line">오늘의 한 줄 (선택)</label>
+      <textarea class="textarea" id="line" name="line" maxlength="200" data-autosave="{{ url_for('save_line', sid=s.row.id, n=ep.index) }}">{{ line }}</textarea>
+    </div>
+    <button class="btn btn--primary btn--block" type="submit">다 봤어요</button>
+  </form>
+  <a class="link" href="{{ notion_url }}" target="_blank" rel="noopener">노션에서 원문 보기 ↗</a>
+</div>
+{% endblock %}

@@ -1,13 +1,10 @@
-"""입장(FR-001): PIN 해시, 로그인 유지 토큰, 쿠키."""
+"""입장(FR-001): PIN 해시, 로그인 유지 토큰. 쿠키 읽기·쓰기는 웹 계층(app.py)이 한다."""
 from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import re
 import secrets
-
-import streamlit as st
 
 from . import store
 
@@ -51,25 +48,9 @@ def issue_token(user_id: str) -> str:
     return token
 
 
-def user_from_cookie() -> dict | None:
-    try:
-        token = st.context.cookies.get(COOKIE)
-    except Exception:  # 테스트 환경 등 쿠키를 읽을 수 없으면 PIN 입력으로
-        return None
-    return store.get_user_by_token_hash(_hash_token(token)) if isinstance(token, str) and token else None
-
-
-def write_cookie(token: str | None) -> None:
-    """브라우저 쿠키 저장/삭제. st.iframe의 HTML은 앱과 같은 출처라 document.cookie가 앱에 적용된다.
-    넣는 값은 앱이 만든 토큰뿐이다(사용자 입력 아님)."""
-    value = json.dumps(token or "")
-    age = COOKIE_DAYS * 86400 if token else 0
-    with st.container(key="wg-cookie"):
-        st.iframe(
-            f"<script>document.cookie = '{COOKIE}=' + encodeURIComponent({value}) + "
-            f"'; max-age={age}; path=/; SameSite=Lax';</script>",
-            height=1,
-        )
+def user_from_token(token: str | None) -> dict | None:
+    """쿠키에 든 로그인 토큰으로 사용자 찾기. 저장소에는 토큰의 해시만 있다."""
+    return store.get_user_by_token_hash(_hash_token(token)) if token else None
 
 
 def logout(user_id: str) -> None:

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, topbar %}
+{% block body_class %}{{ 'has-cta' if not s.finished and s.next_ep else '' }}{% endblock %}
+{% block content %}
+{{ topbar(url_for('library'), '서재') }}
+
+{# 1구역: 머리 — 시즌 제목 + 진행 (2순위: 진행과 다음 선물) #}
+<header class="section">
+  <div class="group">
+    <h1 class="t-title">{{ s.row.title }}</h1>
+    <p class="t-sub">하루 {{ s.minutes }}분 · {{ s.done|length }}/{{ s.total }}화</p>
+  </div>
+  <div class="progress">
+    <div class="bar" aria-hidden="true"><span style="width: {{ (100 * (s.done|length) / s.total)|round|int if s.total else 0 }}%"></span></div>
+    {% if next_gift %}
+    <p class="t-meta">◆ {{ '완결 선물' if next_gift[2] == 'final' else '중간 선물(편지)' }}까지 {{ next_gift[1] }}화</p>
+    {% endif %}
+  </div>
+  <a class="link" href="{{ url_for('goal', sid=s.row.id) }}">목표·선물 바꾸기</a>
+</header>
+
+{# 2구역: 회차 목록 — 반복이라 선으로 구분, 이어 볼 회차만 강조 (1순위) #}
+<ol class="eps">
+  {% for ep in s.episodes %}
+  {% set is_done = ep.index in s.done %}
+  {% set is_current = ep.index == s.current_ep and not s.finished %}
+  <li>
+    <a class="ep{% if is_done %} ep--done{% elif is_current %} ep--current{% endif %}" href="{{ url_for('episode', sid=s.row.id, n=ep.index) }}">
+      <span class="ep__no">{{ ep.index }}화 · 약 {{ ep.minutes }}분</span>
+      <span class="ep__title">{{ ep.title }}</span>
+      {% if is_done or is_current or ep.index in gifts %}
+      <span class="ep__tags">
+        {% if is_done %}{{ badge('read', '✓ 끝냄') }}
+        {% elif is_current %}{{ badge('arrived', '오늘의 화 도착') if arrived else badge('waiting', arrival_text) }}{% endif %}
+        {% if ep.index in gifts %}{{ badge('gift', '◆ ' ~ gifts[ep.index]) }}{% endif %}
+      </span>
+      {% endif %}
+    </a>
+  </li>
+  {% endfor %}
+</ol>
+{% endblock %}
+{% block cta %}
+{% if not s.finished and s.next_ep %}
+<div class="cta-bar"><a class="btn btn--primary" href="{{ url_for('episode', sid=s.row.id, n=s.current_ep) }}">{{ '첫 화 보기' if not s.done else '이어보기 · ' ~ s.current_ep ~ '화' }}</a></div>
+{% endif %}
+{% endblock %}

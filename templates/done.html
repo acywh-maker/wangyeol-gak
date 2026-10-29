@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+{# 1순위: 해방감 #}
+<header class="done-hero">
+  <h1 class="done-hero__title">오늘 몫 끝!</h1>
+  <p class="stat">지금까지 끝낸 회차 {{ total_done }}개</p>
+</header>
+
+<div class="section">
+  {# 2순위: 다음 선물까지 #}
+  {% if next_gift %}
+  <div class="progress">
+    <p class="t-sub">{{ '중간 선물(편지)' if next_gift[2] == 'mid' else '완결 선물' }}까지 {{ next_gift[1] }}화 남음</p>
+    <div class="bar" aria-hidden="true"><span style="width: {{ (100 * n / next_gift[0])|round|int }}%"></span></div>
+  </div>
+  {% endif %}
+
+  {% if gift_here %}
+  <a class="btn btn--primary btn--block" href="{{ url_for('gift_arrived', sid=s.row.id, n=n) }}">선물 확인하기</a>
+  {% else %}
+  {# 3순위: 다음 화 #}
+  {% if n < s.total %}
+  <div class="box"><span class="box__label">다음 화</span><p class="t-body">{{ n + 1 }}화는 {{ arrival or '지금 볼 수 있어요' }}</p></div>
+  {% endif %}
+  <div class="pair">
+    {% if n < s.total %}<a class="btn btn--secondary" href="{{ url_for('episode', sid=s.row.id, n=n + 1) }}">지금 열기</a>{% endif %}
+    <a class="btn btn--secondary" href="{{ url_for('library') }}">서재로</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+{% if celebrate %}
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js" defer></script>
+<script>window.addEventListener('load', () => window.confetti && confetti({ particleCount: 90, spread: 70, origin: { y: 0.35 } }));</script>
+{% endif %}
+{% endblock %}

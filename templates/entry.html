@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block body_class %}has-cta{% endblock %}
+{% block content %}
+<header class="hero">
+  <h1 class="hero__title">완결각</h1>
+  <p class="t-body" style="color: var(--text-tertiary)">쌓아 둔 노트를 웹소설처럼 하루 한 화씩</p>
+</header>
+
+<form id="entry" class="section" method="post" action="{{ url_for('enter') }}">
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <div class="field">
+    <label for="nickname">닉네임 (2~12자)</label>
+    <input class="input" id="nickname" name="nickname" maxlength="12" value="{{ nickname }}" autocomplete="nickname" required>
+  </div>
+  <div class="field">
+    <label for="pin">PIN 4자리</label>
+    <input class="input" id="pin" name="pin" type="password" inputmode="numeric" pattern="\d{4}" maxlength="4" autocomplete="current-password" required>
+  </div>
+  <p class="t-meta">처음이면 자동으로 가입돼요</p>
+</form>
+{% endblock %}
+{% block cta %}
+<div class="cta-bar"><button class="btn btn--primary" type="submit" form="entry">시작하기</button></div>
+{% endblock %}

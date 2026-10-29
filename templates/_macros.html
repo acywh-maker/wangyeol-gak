@@ -1,0 +1,16 @@
+{# 공통 부품 #}
+
+{% macro badge(kind, label) -%}
+<span class="badge badge--{{ kind }}">{{ label }}</span>
+{%- endmacro %}
+
+{# 맨 위: 왼쪽 뒤로 가기, 오른쪽 테마 토글 #}
+{% macro topbar(back_href=None, back_label=None) -%}
+<div class="topbar">
+  {% if back_href %}<a class="btn btn--tertiary" href="{{ back_href }}">‹ {{ back_label }}</a>{% else %}<span></span>{% endif %}
+  <form method="post" action="{{ url_for('toggle_theme') }}">
+    <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+    <button class="btn btn--tertiary" type="submit">{{ '☀️ 라이트 모드' if theme == 'dark' else '🌙 다크 모드' }}</button>
+  </form>
+</div>
+{%- endmacro %}

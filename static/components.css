@@ -1,0 +1,141 @@
+/* ==========================================================================
+   완결각 화면 부품 — tokens.css 뒤에 불러온다.
+   색·크기는 var(--의미 토큰)만 쓴다. 기본 값(--gray-*, --brand-*)을 직접 쓰지 않는다.
+
+   4원칙
+   1 정렬     모든 화면 왼쪽 기준선 하나(--gutter). 가운데 정렬은 회차 첫머리·완료 화면만
+   2 가독성   글자 역할 4단계(.t-title/.t-key/.t-body/.t-sub/.t-meta) + 배지 12
+   3 계층     화면마다 1순위 하나만 가장 강하게 (예: 서재의 '오늘 볼 시즌', 시즌 홈의 '이어 볼 회차')
+   4 그룹화   간격 3단계: --gap-in(묶음 안) / --gap-group(묶음 사이) / --gap-section(구역 사이)
+              반복되는 항목은 선, 독립된 정보는 박스
+   ========================================================================== */
+
+/* ---------- 쪽 틀 ---------- */
+.page {
+  max-width: var(--reading-max); margin: 0 auto;
+  padding: var(--space-6) var(--gutter) var(--gap-section);
+  display: flex; flex-direction: column; gap: var(--gap-section);
+}
+@media (max-width: 599px) { .page { padding-left: var(--gutter); padding-right: var(--gutter); } }
+.section { display: flex; flex-direction: column; gap: var(--gap-group); }
+.group { display: flex; flex-direction: column; gap: var(--gap-in); }
+.row { display: flex; align-items: center; gap: var(--gap-in); flex-wrap: wrap; }
+.topbar { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+.topbar form { margin: 0; }
+.stat { font-size: var(--fs-meta-lg); line-height: var(--lh-meta-lg); color: var(--text-tertiary); }
+.link { color: var(--text-secondary); font-size: var(--fs-body-md); font-weight: var(--fw-semibold); text-underline-offset: 3px; }
+.error { color: var(--text-strong); background: var(--bg-notice); border-left: 3px solid var(--action-highlight); padding: var(--space-5) var(--space-6); border-radius: var(--radius-sm); font-size: var(--fs-body-md); }
+
+/* ---------- 배지 (정보형만 — 경고색·깜빡임 금지, PRD 7장 1번) ---------- */
+.badge {
+  display: inline-flex; align-items: center; height: var(--badge-height); padding: 0 var(--badge-padding-x);
+  border-radius: var(--radius-pill); font-size: var(--fs-badge); font-weight: var(--fw-semibold); white-space: nowrap;
+}
+.badge--arrived { background: var(--status-arrived-bg); color: var(--status-arrived-fg); }
+.badge--waiting { background: var(--status-waiting-bg); color: var(--status-waiting-fg); }
+.badge--done    { background: var(--status-done-bg); color: var(--status-done-fg); padding: 0 var(--space-4); }
+.badge--new     { background: var(--bg-surface); border: 1px solid var(--status-new-line); color: var(--text-on-surface-muted); }
+.badge--read    { background: var(--status-waiting-bg); color: var(--text-on-surface-muted); }
+.badge--gift    { background: var(--bg-surface); border: 1px solid var(--status-gift-line); color: var(--text-on-surface); }
+
+/* ---------- S2 서재: 카드 (독립된 정보 = 박스) ---------- */
+.cards { display: flex; flex-direction: column; gap: var(--gap-group); list-style: none; padding: 0; }
+.card {
+  display: flex; flex-direction: column; gap: var(--gap-in);
+  padding: var(--space-7); border-radius: var(--radius-xl);
+  background: var(--bg-surface); color: var(--text-on-surface); box-shadow: var(--shadow-card);
+  text-decoration: none;
+}
+.card__title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: var(--fs-title-sm); line-height: var(--lh-title-sm); font-weight: var(--fw-bold); color: var(--text-on-surface);
+}
+.card__meta { display: flex; align-items: center; gap: var(--gap-in); font-size: var(--fs-body-md); color: var(--text-on-surface-muted); }
+/* 1순위: 오늘 볼 시즌 — 지금 할 행동이라 오렌지 테두리 */
+.card--today { box-shadow: var(--shadow-card), inset 0 0 0 2px var(--action-primary); }
+/* 완결 시즌: 흐리게 (사용자 시안) */
+.card--done { background: var(--status-done-card-bg); box-shadow: none; }
+.card--done .card__title, .card--done .card__meta { color: var(--status-done-card-fg); }
+
+/* ---------- S2-b 시즌 홈: 회차 목록 (반복되는 항목 = 선) ---------- */
+.progress { display: flex; flex-direction: column; gap: var(--gap-in); }
+.bar { height: 6px; border-radius: var(--radius-pill); background: var(--bg-muted); overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--text-tertiary); }
+.eps { list-style: none; padding: 0; display: flex; flex-direction: column; }
+.ep {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-5) 0; border-bottom: 1px solid var(--line-subtle);
+  color: inherit; text-decoration: none;
+}
+.ep__no { font-size: var(--fs-caption); color: var(--text-tertiary); }
+.ep__title { font-size: var(--fs-body-lg); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.ep__tags { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
+.ep--done .ep__title, .ep--done .ep__no { color: var(--status-read-fg); }
+/* 1순위: 이어 볼 회차 */
+.ep--current {
+  background: var(--status-current-bg); border-radius: var(--radius-md); border-bottom-color: transparent;
+  padding: var(--space-5) var(--space-6); margin: var(--space-2) 0;
+  box-shadow: inset 3px 0 0 var(--action-primary);
+}
+.ep--current .ep__title { color: var(--text-strong); font-weight: var(--fw-bold); }
+
+/* ---------- S4 회차 ---------- */
+.viewer-head {
+  display: flex; flex-direction: column; align-items: center; gap: var(--gap-in); text-align: center;
+  padding: var(--space-8) 0 var(--gap-group); border-bottom: 1px solid var(--line-default);
+}
+.box { display: flex; flex-direction: column; gap: var(--gap-in); padding: var(--space-6); border-radius: var(--radius-md); background: var(--bg-notice); }
+.box__label { font-size: var(--fs-caption); font-weight: var(--fw-semibold); color: var(--text-tertiary); }
+.pred { display: flex; flex-direction: column; gap: var(--gap-group); padding: var(--space-6); border-radius: var(--radius-md); border: 1px solid var(--line-strong); background: var(--bg-box); }
+.pred__q { font-size: var(--fs-body-lg); font-weight: var(--fw-bold); color: var(--text-strong); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-in); }   /* 같은 크기 선택지 (PRD 7장 8번) */
+.pair .btn { width: 100%; height: 100%; }
+
+/* 노션 본문 */
+.content { display: flex; flex-direction: column; gap: var(--gap-group); }
+.content p, .content li { font-size: var(--fs-body-lg); line-height: 1.75; color: var(--text-primary); }
+.content ul, .content ol { padding-left: 1.4em; display: flex; flex-direction: column; gap: var(--space-2); }
+.content h3 { font-size: var(--fs-title-sm); line-height: var(--lh-title-sm); color: var(--text-strong); margin-top: var(--gap-in); }
+.content h4 { font-size: var(--fs-body-lg); color: var(--text-strong); }
+.content blockquote { margin: 0; padding-left: var(--space-6); border-left: 3px solid var(--line-strong); color: var(--text-secondary); }
+.content a { color: var(--text-strong); text-underline-offset: 3px; }
+.content hr { border: 0; border-top: 1px solid var(--line-default); margin: 0; }
+.content figure img { display: block; width: 100%; height: auto; border-radius: var(--radius-sm); }
+.content figcaption { margin-top: var(--gap-in); font-size: var(--fs-caption); color: var(--text-tertiary); }
+.content details { border: 1px solid var(--line-default); border-radius: var(--radius-md); padding: var(--space-5) var(--space-6); }
+.content summary { cursor: pointer; font-weight: var(--fw-semibold); color: var(--text-strong); }
+.content details[open] summary { margin-bottom: var(--gap-in); }
+.content code { font-size: .92em; background: var(--bg-muted); padding: 0 .3em; border-radius: var(--radius-xs); }
+.callout { display: flex; gap: var(--gap-in); padding: var(--space-6); border-radius: var(--radius-md); background: var(--bg-notice); }
+.video { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius-md); overflow: hidden; background: #000; }
+.video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.lecture { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-5) var(--space-6); border-radius: var(--radius-md); border: 1px solid var(--line-default); background: var(--bg-surface); }
+.lecture__title { font-size: var(--fs-body-lg); font-weight: var(--fw-semibold); color: var(--text-on-surface); }
+.lecture__span { font-size: var(--fs-body-md); color: var(--text-on-surface-muted); }
+
+/* ---------- S1 · S5 · 선물 ---------- */
+.hero { display: flex; flex-direction: column; gap: var(--gap-in); padding-top: var(--space-11); }
+.hero__title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: var(--fw-bold); color: var(--text-strong); }
+.done-hero { display: flex; flex-direction: column; align-items: center; gap: var(--gap-in); text-align: center; padding-top: var(--space-11); }
+.done-hero__title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: var(--fw-bold); color: var(--text-strong); }
+.choice-cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-in); }   /* 같은 크기 (PRD 7장 8번) */
+.choice-card { position: relative; }
+.choice-card input { position: absolute; opacity: 0; inset: 0; }
+.choice-card span {
+  display: flex; align-items: center; justify-content: center; min-height: 56px; height: 100%;
+  padding: var(--space-4) var(--space-5); border-radius: var(--radius-md); border: 1px solid var(--line-strong);
+  background: var(--bg-surface); color: var(--text-on-surface-muted); text-align: center;
+  font-size: var(--fs-body-md); font-weight: var(--fw-semibold); cursor: pointer;
+}
+.choice-card input:checked + span { border-color: var(--action-primary); color: var(--text-on-surface); box-shadow: inset 0 0 0 1px var(--action-primary); }
+.choice-card input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.gift-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-in); }
+.gift { display: flex; flex-direction: column; gap: var(--gap-in); padding: var(--space-5); border-radius: var(--radius-md); border: 1px solid var(--line-default); background: var(--bg-surface); color: var(--text-on-surface); font: inherit; font-size: var(--fs-body-md); font-weight: var(--fw-semibold); cursor: pointer; }
+.gift__img { aspect-ratio: 1 / 1; border-radius: var(--radius-sm); background: var(--bg-placeholder); }
+.gift-box { display: flex; flex-direction: column; align-items: center; gap: var(--gap-group); padding: var(--space-8); border-radius: var(--radius-xl); background: var(--bg-surface); color: var(--text-on-surface); }
+.gift-box .gift__img { width: 60%; }
+.stamp { padding: var(--space-3) var(--space-6); border: 2px solid var(--status-gift-line); border-radius: var(--radius-pill); font-weight: var(--fw-bold); transform: rotate(-6deg); }
+.tabs { display: flex; gap: var(--gap-in); }
+
+/* 개발용 (DEV_MODE) */
+.devbar { position: fixed; top: 0; right: 0; z-index: 60; padding: var(--space-2) var(--space-4); font-size: 12px; background: var(--bg-notice); color: var(--text-tertiary); border-bottom-left-radius: var(--radius-sm); }
