@@ -389,7 +389,23 @@ def dev_time():
 
 @app.get("/healthz")
 def healthz():
-    return {"ok": True}
+    """배포 점검용. 값은 절대 보여 주지 않고, 설정이 '있는지'와 연결 결과만 알려 준다."""
+    keys = ["NOTION_TOKEN", "NOTION_ROOT_PAGE_ID", "SECRET_KEY", "ADMIN_PASSWORD", "KV_REST_API_URL",
+            "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "SHEET_ID"]
+    report = {"env": {k: bool(config.get(k)) for k in keys}}
+    try:
+        report["store"] = type(store.backend()).__name__
+        store.reset_cache()
+        store.table("users")
+        report["store_ok"] = True
+    except Exception as e:  # 연결 실패 이유만 (비밀값 없음)
+        report["store_ok"] = f"{type(e).__name__}: {str(e)[:120]}"
+    try:
+        report["notion_seasons"] = len(notion.list_seasons())
+    except notion.NotionError as e:
+        report["notion_seasons"] = f"오류 {str(e)[:120]}"
+    report["ok"] = report["store_ok"] is True and isinstance(report["notion_seasons"], int)
+    return report
 
 
 if __name__ == "__main__":
