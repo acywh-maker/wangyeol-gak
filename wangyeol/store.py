@@ -1,7 +1,8 @@
 """저장소 (PRD 11장). 행은 시트 한 줄과 같은 dict이며, 위치(position)처럼 구조가 있는 값은 JSON 문자열로 넣는다.
 
-백엔드:
-- SHEET_ID + GCP_SERVICE_ACCOUNT_JSON 환경변수가 있으면 구글 시트 (wangyeol/sheets.py)
+백엔드 (위에서부터 먼저 찾은 것):
+- KV_REST_API_URL + KV_REST_API_TOKEN (또는 UPSTASH_REDIS_REST_*) → Upstash Redis (wangyeol/redis_store.py, Vercel 연동)
+- SHEET_ID + GCP_SERVICE_ACCOUNT_JSON → 구글 시트 (wangyeol/sheets.py)
 - 없으면 로컬 JSON 파일 (개발·테스트용, data/store.json 또는 WG_STORE)
 요청마다 reset_cache()를 부르면, 그 요청 동안은 한 번 읽은 데이터를 다시 쓴다 (시트 API 호출 절약).
 """
@@ -61,7 +62,12 @@ def backend():
     global _backend
     if _backend is None:
         sheet_id, sa = config.get("SHEET_ID"), config.get("GCP_SERVICE_ACCOUNT_JSON")
-        if sheet_id and sa:
+        kv_url = config.get("KV_REST_API_URL") or config.get("UPSTASH_REDIS_REST_URL")
+        kv_token = config.get("KV_REST_API_TOKEN") or config.get("UPSTASH_REDIS_REST_TOKEN")
+        if kv_url and kv_token:
+            from .redis_store import RedisBackend
+            _backend = RedisBackend.from_env(kv_url, kv_token)
+        elif sheet_id and sa:
             from .sheets import SheetsBackend
             _backend = SheetsBackend.from_env(sheet_id, sa)
         else:
@@ -83,8 +89,13 @@ def _load() -> dict:
     return _cache
 
 
-def _save(data: dict, table: str) -> None:
-    backend().save(data, table)
+def _save(data: dict, table: str, row: dict | None = None) -> None:
+    """행 하나만 바뀌었으면 그 행만 저장할 수 있는 백엔드(Redis)는 행 단위로 저장한다."""
+    b = backend()
+    if row is not None and hasattr(b, "put"):
+        b.put(table, row)
+    else:
+        b.save(data, table)
 
 
 def _rows(table: str, **where) -> list[dict]:
@@ -98,11 +109,11 @@ def _upsert(table: str, keys: dict, values: dict) -> dict:
         for r in data[table]:
             if all(r.get(k) == v for k, v in keys.items()):
                 r.update(values)
-                _save(data, table)
+                _save(data, table, r)
                 return r
         row = {**keys, **values}
         data[table].append(row)
-        _save(data, table)
+        _save(data, table, row)
         return row
 
 
@@ -112,6 +123,12 @@ def _append(table: str, row: dict) -> dict:
         data[table].append(row)
         backend().append(table, row)
         return row
+
+
+def table(name: str) -> list[dict]:
+    """운영자 화면(CSV 내려받기·KPI)용 탭 전체."""
+    with _LOCK:
+        return list(_load()[name])
 
 
 def pos_key(pos) -> str:
@@ -190,10 +207,10 @@ def add_completion(user_id: str, season_id: str, ep_index: int, start, end, est_
         if any(r["user_id"] == user_id and r["season_id"] == season_id and r["ep_index"] == ep_index
                for r in data["completions"]):
             return False
-        data["completions"].append({"user_id": user_id, "season_id": season_id, "ep_index": ep_index,
-                                    "start_pos": pos_key(start), "end_pos": pos_key(end),
-                                    "est_min": est_min, "completed_at": now})
-        _save(data, "completions")
+        row = {"user_id": user_id, "season_id": season_id, "ep_index": ep_index,
+               "start_pos": pos_key(start), "end_pos": pos_key(end), "est_min": est_min, "completed_at": now}
+        data["completions"].append(row)
+        _save(data, "completions", row)
         return True
 
 

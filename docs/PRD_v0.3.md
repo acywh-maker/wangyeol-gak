@@ -67,7 +67,7 @@
 - Python + **Flask**(서버 렌더링 HTML + 작은 JS), Claude Code 바이브 코딩. (10/29 Streamlit → Flask 전환: Vercel 배포를 위해. Streamlit 버전은 git 태그 `streamlit-v1`)
 - **AI API 사용 안 함** (요약·회차 분할 모두 규칙 기반)
 - 콘텐츠: **노션 API, 내부 연결(Internal integration)** 1개. 사용자 각자의 노션 연결(OAuth)은 하지 않음
-- 저장소: **구글 시트** (`기본값`). gspread + 서비스 계정. 시트 연결 전까지는 **로컬 JSON 파일**로 저장하고, 저장 계층만 교체할 수 있게 만든다. Vercel 서버리스는 파일 저장이 유지되지 않음(확인됨)
+- 저장소: **Upstash Redis**(Vercel 마켓플레이스 연동, 행 단위 저장) — 10/29 변경: 구글 계정 본인 확인 차단으로 구글 클라우드 서비스 계정을 만들 수 없어서. 구글 시트 백엔드는 코드에 남겨 두어 나중에 바꿀 수 있음. 데이터 확인은 `/admin` CSV 내려받기(비밀번호 보호, PIN 해시·토큰 제외). 로컬 개발은 JSON 파일
 - 배포: **Vercel** (서버리스 Python, GitHub `main` 푸시 시 자동 배포). 서버리스라 로컬 파일 저장이 유지되지 않으므로 운영 저장은 구글 시트 필수
 - 비밀값: 노션 토큰, 구글 서비스 계정 키, SECRET_KEY는 **환경변수**(Vercel Environment Variables / 로컬 `.env`)에만. 코드·깃에 넣지 않음 (`.env.example` 참고)
 

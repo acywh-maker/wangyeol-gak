@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}운영자 · 완결각{% endblock %}
+{% block content %}
+<h1 class="t-title">운영자</h1>
+{% if not authed %}
+<form class="section" method="post">
+  <div class="field"><label for="pw">운영자 비밀번호</label><input class="input" id="pw" name="password" type="password" required></div>
+  <button class="btn btn--primary btn--block" type="submit">들어가기</button>
+</form>
+{% else %}
+<div class="section">
+  <p class="t-sub">표별 행 수 · CSV 내려받기 (엑셀에서 열림)</p>
+  <ul class="eps">
+    {% for t, n in counts.items() %}
+    <li><a class="ep" href="{{ url_for('admin_export', table=t) }}"><span class="ep__title">{{ t }}</span><span class="ep__no">{{ n }}행 · 내려받기</span></a></li>
+    {% endfor %}
+  </ul>
+  <p class="t-meta">users 표에서는 PIN 해시와 로그인 토큰을 빼고 내보내요.</p>
+</div>
+{% endif %}
+{% endblock %}

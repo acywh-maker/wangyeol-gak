@@ -80,3 +80,14 @@ def test_text_is_escaped(client):
     signup(client, nick="<b>해커</b>")
     page = client.get("/").get_data(as_text=True)
     assert "<b>해커</b>" not in page and "&lt;b&gt;해커&lt;/b&gt;" in page
+
+
+def test_admin_export_hides_secrets(client, monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD", "관리")
+    signup(client)
+    assert client.get("/admin/export/users.csv").status_code == 404  # 로그인 전
+    client.post("/admin", data={"password": "틀림"})
+    assert client.get("/admin/export/users.csv").status_code == 404
+    client.post("/admin", data={"password": "관리"})
+    csv_text = client.get("/admin/export/users.csv").get_data(as_text=True)
+    assert "테스터" in csv_text and "pin_hash" not in csv_text and "login_token_hash" not in csv_text

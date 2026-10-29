@@ -5,6 +5,9 @@
 """
 from __future__ import annotations
 
+import csv
+import hmac
+import io
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from functools import wraps
@@ -341,6 +344,37 @@ def gift_arrived(sid, n):
     written = rules.parse_ts(gft.get("created_at"))
     return render_template("gift_arrived.html", s=s, n=n, gift=gft,
                            written=f"{written.month}월 {written.day}일" if written else "")
+
+
+# ---------- 운영자 (FR-014 일부: 데이터 확인·CSV 내려받기) ----------
+
+@app.route("/admin", methods=["GET", "POST"])
+def admin():
+    password = config.get("ADMIN_PASSWORD")
+    if request.method == "POST":
+        session["admin"] = bool(password) and hmac.compare_digest(request.form.get("password", "").encode(), password.encode())
+        return redirect(url_for("admin"))
+    if not session.get("admin"):
+        return render_template("admin.html", authed=False)
+    counts = {t: len(store.table(t)) for t in store.TABLES}
+    return render_template("admin.html", authed=True, counts=counts)
+
+
+@app.get("/admin/export/<table>.csv")
+def admin_export(table):
+    if not session.get("admin") or table not in store.TABLES:
+        abort(404)
+    rows = store.table(table)
+    if table == "users":  # 비밀번호 해시·로그인 토큰은 내보내지 않는다
+        rows = [{k: v for k, v in r.items() if k not in ("pin_hash", "salt", "login_token_hash")} for r in rows]
+    cols = list(dict.fromkeys(k for r in rows for k in r))
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=cols)
+    writer.writeheader()
+    writer.writerows(rows)
+    # 엑셀에서 한글이 깨지지 않게 BOM
+    return app.response_class("﻿" + buf.getvalue(), mimetype="text/csv",
+                              headers={"Content-Disposition": f"attachment; filename={table}.csv"})
 
 
 # ---------- 개발용 ----------
