@@ -165,9 +165,6 @@ def render_segment(units: list, seg) -> None:
     if u.kind == "video":
         base = (u.youtube["range"] or (0, None))[0]
         start, end = base + seg.start, base + seg.end
-        if partial:
-            label = f"{'처음' if seg.start == 0 else fmt_clock(start)} ~ {'끝' if seg.end >= u.seconds else fmt_clock(end)}"
-            st.html(f'<div class="wg-range">▶ 이번 화 구간 {label}</div>')
         whole_end = u.youtube["range"] is None and seg.end >= u.seconds
         st.video(f"https://www.youtube.com/watch?v={u.youtube['id']}", start_time=int(start),
                  end_time=None if whole_end else int(end))
@@ -182,38 +179,3 @@ def render_segment(units: list, seg) -> None:
         )
     else:
         render_blocks(u.blocks)
-
-
-APP_CSS = """
-<style>
-/* 완결각 전용 규칙 (tokens.css 뒤에 덧붙임). 읽기 앱이라 본문 폭과 글자 크기를 키운다 */
-[data-testid="stMainBlockContainer"] { max-width: 720px; }
-/* tokens.css의 '.stApp * { font-family }'가 아이콘 글꼴까지 덮어써서 아이콘 이름이 글자로 보이는 문제 복구 */
-[data-testid="stIconMaterial"], .material-symbols-rounded { font-family: "Material Symbols Rounded" !important; }
-.stMarkdown p, .stMarkdown li { font-size: var(--fs-body-lg); line-height: 1.7; color: var(--text-primary); }
-.stMarkdown, .stMarkdown p, .stMarkdown li { overflow-wrap: anywhere; word-break: keep-all; }
-.stMarkdown a { word-break: break-all; }
-.stMarkdown blockquote { border-left: 3px solid var(--line-strong); color: var(--text-secondary); }
-img, iframe, video { max-width: 100%; }
-
-.wg-title { font-size: var(--fs-title-lg); line-height: var(--lh-title-lg); font-weight: 700; color: var(--text-strong); margin: var(--space-2) 0 var(--space-4); }
-.wg-meta { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); }
-.wg-label { font-size: var(--fs-caption); font-weight: 600; color: var(--text-tertiary); margin-bottom: var(--space-2); }
-
-[class*="st-key-wg-card"] {
-  background: var(--bg-default); border-radius: var(--radius-xl); box-shadow: var(--shadow-card);
-  padding: var(--space-7);
-}
-.wg-card-title {
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  font-size: var(--fs-title-sm); line-height: var(--lh-title-sm); font-weight: 700; color: var(--text-strong);
-}
-[class*="st-key-wg-summary"] { background: var(--bg-notice); border-radius: var(--radius-md); padding: var(--space-6); }
-[class*="st-key-wg-box"] { border: 1px solid var(--line-default); border-radius: var(--radius-md); padding: var(--space-6); }
-
-.wg-lecture { border: 1px solid var(--line-default); border-radius: var(--radius-md); padding: var(--space-5) var(--space-6); margin: var(--space-2) 0; }
-.wg-lecture__title { font-size: var(--fs-body-lg); font-weight: 600; color: var(--text-primary); }
-.wg-lecture__span { font-size: var(--fs-body-md); color: var(--text-tertiary); margin-top: var(--space-2); }
-.wg-range { font-size: var(--fs-body-md); font-weight: 600; color: var(--text-secondary); margin-bottom: var(--space-2); }
-</style>
-"""

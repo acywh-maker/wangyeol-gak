@@ -67,6 +67,12 @@ def _next_episode(units: list[Unit], target: float, start: Position) -> tuple[li
         del segs[best[3]:]
         return (best[1], 0.0)
 
+    def cut_before(idx: int, offset: float) -> tuple[list[Segment], Position]:
+        """idx 앞에서 끊는다. 끝에 제목만 남으면 그 제목은 다음 회차의 시작으로 넘긴다."""
+        while len(segs) > 1 and units[segs[-1].unit].heading and segs[-1].start == 0:
+            idx, offset = segs.pop().unit, 0.0
+        return segs, (idx, offset)
+
     while i < len(units):
         u = units[i]
         rem = u.seconds - off
@@ -90,7 +96,7 @@ def _next_episode(units: list[Unit], target: float, start: Position) -> tuple[li
             if not segs or short:
                 segs.append(Segment(i, off, u.seconds))
                 return segs, (i + 1, 0.0)
-            return segs, (i, off)
+            return cut_before(i, off)
 
         if acc + rem <= hi or not segs:
             segs.append(Segment(i, 0.0, u.seconds))
@@ -122,6 +128,11 @@ def plan(season: Season, minutes: int, start: Position = (0, 0.0), first_index: 
         (s0, _, a), (_, e1, b) = raw[-2], raw[-1]
         raw[-2:] = [(s0, e1, a + b)]
 
+    return _build(units, raw, start, first_index)
+
+
+def _build(units: list[Unit], raw: list[tuple[Position, Position, list[Segment]]],
+           start: Position, first_index: int) -> list[Episode]:
     # 영상·강의가 여러 회차에 걸치면 "(1/3)"처럼 몇 번째 조각인지 붙인다
     pieces: dict[int, list[int]] = {}
     for k, (_, _, segs) in enumerate(raw):
@@ -169,5 +180,37 @@ def _title(units: list[Unit], segs: list[Segment], context: str, index: int) -> 
     return f"{index}화", new_context
 
 
-def episode_count(season: Season, minutes: int) -> int:
-    return len(plan(season, minutes))
+def segments_between(units: list[Unit], a: Position, b: Position) -> list[Segment]:
+    """위치 a부터 b 직전까지의 구간."""
+    segs = []
+    i, off = a
+    while i < len(units) and (i, off) < tuple(b):
+        if i == b[0]:
+            if b[1] > off:
+                segs.append(Segment(i, off, b[1]))
+            break
+        segs.append(Segment(i, off, units[i].seconds))
+        i, off = i + 1, 0.0
+    return segs
+
+
+def episodes_from_starts(season: Season, starts: list[Position]) -> list[Episode]:
+    """저장해 둔 회차 시작 위치로 회차 목록을 다시 만든다 (어떤 순서로 열어도 번호가 고정되도록)."""
+    units = season.units
+    ends = list(starts[1:]) + [(len(units), 0.0)]
+    raw = [(tuple(a), tuple(b), segments_between(units, a, b)) for a, b in zip(starts, ends)]
+    return _build(units, [r for r in raw if r[2]], (0, 0.0), 1)
+
+
+def replan(season: Season, minutes: int, starts: list[Position], keep: int) -> list[Position]:
+    """앞의 keep개 회차는 그대로 두고, 그 뒤를 새 가용시간으로 다시 나눈 시작 위치 목록."""
+    kept = [tuple(p) for p in starts[:keep]]
+    resume = tuple(starts[keep]) if keep < len(starts) else (0, 0.0)
+    if keep and keep >= len(starts):
+        return kept
+    return kept + [e.start for e in plan(season, minutes, start=resume, first_index=keep + 1)]
+
+
+def starts_valid(season: Season, starts: list) -> bool:
+    """노션에서 내용이 바뀌어 시작 위치가 범위를 벗어났는지 (13장 보정용)."""
+    return bool(starts) and all(0 <= p[0] < len(season.units) for p in starts)
