@@ -1,0 +1,36 @@
+# Streamlit theme — values mapped from tokens.json
+# Native theme covers widgets Streamlit draws itself;
+# tokens.css (injected by ds.py) covers the rest.
+
+[theme]
+base = "light"
+
+# color
+primaryColor = "#FFEB60"              # yellow-400 (site --primary)
+backgroundColor = "#FFFFFF"           # bg-default
+secondaryBackgroundColor = "#F7F7F7"  # bg-muted (site --ui-02)
+textColor = "#242424"                 # text-primary (site --text-01)
+linkColor = "#242424"
+linkUnderline = false
+borderColor = "#ECECEC"               # line-default (site --Line-02)
+dataframeBorderColor = "#ECECEC"
+dataframeHeaderBackgroundColor = "#FBFBFB"
+showWidgetBorder = true
+yellowColor = "#FFBF04"
+violetColor = "#A451F7"               # category-audio
+orangeColor = "#EB683F"               # category-chatbook
+grayColor = "#8B8B8B"
+
+# typography (Pretendard via CDN, system fallback)
+font = "'Pretendard Variable':https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif"
+headingFont = "'Pretendard Variable', -apple-system, 'Apple SD Gothic Neo', sans-serif"
+baseFontSize = 14                     # body-md (most used size on the site)
+headingFontSizes = ["44px", "24px", "20px", "18px", "16px", "14px"]  # display / title-lg / title-md / title-sm / body-lg / body-md
+headingFontWeights = [700, 700, 700, 700, 600, 600]
+
+# shape
+baseRadius = "8px"                    # radius-sm
+buttonRadius = "12px"                 # radius-md
+
+[theme.sidebar]
+backgroundColor = "#FBFBFB"           # bg-subtle
