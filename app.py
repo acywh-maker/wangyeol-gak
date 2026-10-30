@@ -17,6 +17,7 @@ ds.apply()
 
 LOAD_ERROR = "노트를 불러오지 못했어요. 잠시 후 다시 시도해 주세요"
 MINUTE_CHOICES = [5, 10, 20, 30, 60]
+SAVE_HINT = "'이대로 약속하기'를 누르면 저장돼요"
 GIFT_ITEMS = {  # FR-010: 일반 상품명 + (예시), 가격 없음
     "커피": ["아메리카노 (예시)", "카페라테 (예시)", "바닐라라테 (예시)", "콜드브루 (예시)"],
     "디저트": ["조각 케이크 (예시)", "마카롱 세트 (예시)", "쿠키 세트 (예시)", "크로플 (예시)"],
@@ -184,6 +185,8 @@ def home() -> None:
     if not s:
         go("library")
     top_bar("서재", "library")
+    if ss.get("flash"):
+        st.toast(ss.pop("flash"), icon="✉️")
     st.html(f'<div class="wg-title">{escape(s.row["title"])}</div>'
             f'<div class="wg-meta">하루 {s.minutes}분 · {len(s.done)}/{s.total}화</div>')
     if st.button("목표·선물 바꾸기", type="tertiary"):
@@ -236,7 +239,7 @@ def goal() -> None:
         draft.clear()
         draft.update(season_id=sid, minutes=s.minutes, final_kind=(final or {}).get("kind", ""),
                      gift_item=(final or {}).get("gift_item", ""),
-                     letters={k: g["letter_text"] for k, g in saved.items() if g["kind"] in ("letter", "letter_final")})
+                     letters={k: g["letter_text"] for k, g in saved.items() if g.get("letter_text")})
 
     if ss.get("goal_edit"):
         back("시즌 홈", "home")
@@ -263,23 +266,28 @@ def goal() -> None:
         draft["letters"][p] = st.text_area(f"{p}화까지 온 나에게 편지 쓰기", value=draft["letters"].get(p, ""),
                                            max_chars=500, key=f"letter-{p}", label_visibility="collapsed",
                                            placeholder=f"{p}화까지 온 나에게 편지 쓰기…")
+        st.caption(SAVE_HINT)
 
     last = points[-1]
     st.html(f'<div class="wg-label">완결 선물 · {last}화</div>')
     with st.container(horizontal=True, key="ds-row-final"):
-        for kind, label in (("letter_final", "편지로 대신하기 · 무료"), ("gifticon", "기프티콘 고르기")):
+        for kind, label in (("letter_final", "편지만 보내기"), ("gifticon", "기프티콘 고르기")):
             mark = "✓ " if draft["final_kind"] == kind else ""
             if st.button(mark + label, key=f"final-{kind}", width="stretch"):
                 draft["final_kind"] = kind
                 if kind == "gifticon":
                     go("gift")
                 st.rerun()
-    if draft["final_kind"] == "letter_final":
+    if draft["final_kind"] == "gifticon" and draft["gift_item"]:
+        st.caption(f"고른 선물: {draft['gift_item']} · 결제 기능은 아직 준비 중이에요")
+    if draft["final_kind"]:  # 편지만 보내기 / 기프티콘에 편지 동봉(선택)
+        with_gift = draft["final_kind"] == "gifticon"
+        if with_gift:
+            st.html('<div class="wg-label">편지도 함께 쓰기 (선택)</div>')
         draft["letters"][last] = st.text_area("완결한 나에게 편지 쓰기", value=draft["letters"].get(last, ""),
                                               max_chars=500, key=f"letter-{last}", label_visibility="collapsed",
                                               placeholder="완결한 나에게 편지 쓰기…")
-    elif draft["final_kind"] == "gifticon" and draft["gift_item"]:
-        st.caption(f"고른 선물: {draft['gift_item']} · 결제 기능은 아직 준비 중이에요")
+        st.caption(SAVE_HINT)
 
     # 처음: 저장 없이 시작(10분) / 수정 중: 바꾸지 않고 시즌 홈으로
     if st.button("다음에 정할게요", type="tertiary"):
@@ -296,13 +304,15 @@ def goal() -> None:
             for p in points[:-1]:
                 if draft["letters"].get(p, "").strip():
                     store.save_gift(uid, sid, p, "letter", letter_text=draft["letters"][p].strip(), now=ts)
+            final_letter = draft["letters"].get(last, "").strip()
             if draft["final_kind"] == "letter_final":
-                store.save_gift(uid, sid, last, "letter_final", letter_text=draft["letters"].get(last, "").strip(), now=ts)
+                store.save_gift(uid, sid, last, "letter_final", letter_text=final_letter, now=ts)
             elif draft["final_kind"] == "gifticon":
-                store.save_gift(uid, sid, last, "gifticon", gift_item=draft["gift_item"], now=ts)
+                store.save_gift(uid, sid, last, "gifticon", letter_text=final_letter, gift_item=draft["gift_item"], now=ts)
             log("gift_set", sid, meta={"minutes": draft["minutes"], "final": draft["final_kind"]})
+            wrote = any(draft["letters"].get(p, "").strip() for p in points[:-1]) or (draft["final_kind"] and final_letter)
             ss.pop("goal_draft", None)
-            go("home")
+            go("home", flash="편지를 저장했어요" if wrote else "")
 
 
 def gift() -> None:
@@ -483,8 +493,9 @@ def gift_arrived() -> None:
         st.html(f'<div class="wg-label">중간 선물 · {idx}화</div>'
                 f'<div class="wg-title">나와의 약속을 지켜낸 {nick}님 선물이 도착했어요</div>{letter}')
     else:
-        body = (f'<div class="wg-gift-box"><div class="wg-gift__img"></div><div>{escape(g.get("gift_item", ""))}</div>'
-                f'<div class="wg-stamp">선물 도착</div></div>') if g["kind"] == "gifticon" else letter
+        box = (f'<div class="wg-gift-box"><div class="wg-gift__img"></div><div>{escape(g.get("gift_item", ""))}</div>'
+               f'<div class="wg-stamp">선물 도착</div></div>') if g["kind"] == "gifticon" else ""
+        body = box + letter  # 기프티콘에 편지를 동봉했으면 둘 다
         st.html(f'<div class="wg-title">스스로 정한 목표를 끝까지 지킨 {nick}님.<br>정말 대단해요, 약속한 선물이에요.<br>축하드려요!</div>{body}')
     if st.button("서재로", type="primary", width="stretch"):  # S7 완결 리포트는 Day 3
         go("library")
