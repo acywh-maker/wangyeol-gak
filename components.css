@@ -62,6 +62,8 @@ img, iframe, video { max-width: 100%; }
 /* 배지: 정보형만. 빨간색·깜빡임 없음 (7장 1번) */
 .wg-badge { display: inline-flex; align-items: center; height: var(--badge-height); padding: 0 var(--badge-padding-x);
   border-radius: var(--radius-pill); font-size: var(--fs-badge); font-weight: 600; white-space: nowrap; }
+/* 배지 안 아이콘 ({check}, {gift}): 글자 크기와 같은 높이, 글자와 4px */
+.wg-badge .wg-icon { height: var(--fs-badge); width: auto; margin-right: var(--space-2); }
 .wg-badge--arrived { background: var(--status-arrived-bg); color: var(--status-arrived-fg); }
 .wg-badge--waiting { background: var(--status-waiting-bg); color: var(--status-waiting-fg); }
 .wg-badge--done { background: var(--status-done-bg); color: var(--status-done-fg); padding: 0 var(--space-4); }
@@ -125,7 +127,7 @@ img, iframe, video { max-width: 100%; }
 .st-key-ds-row-final button p::before { content: ""; width: var(--button-icon); height: var(--button-icon); flex: none; background-color: currentColor;
   -webkit-mask: var(--icon) no-repeat center / contain; mask: var(--icon) no-repeat center / contain; }
 .st-key-final-letter_final button p::before { --icon: var(--icon-letter); }
-.st-key-final-gifticon button p::before { --icon: var(--icon-giftb-box); }
+.st-key-final-gifticon button p::before { --icon: var(--icon-gift-box); }
 
 /* 라이트/다크 모드 버튼은 14 유지, 입력칸 글자는 기본 UI 글자(16)와 같게 (v02) */
 .st-key-theme-toggle button p { font-size: var(--fs-ui-sm); }

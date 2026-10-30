@@ -124,3 +124,18 @@ def most_recent(user_id: str, states: list[SeasonState]) -> SeasonState | None:
     if not live:
         return None
     return max(live, key=lambda s: by_id[s.row["id"]].get("last_completed_at") or by_id[s.row["id"]].get("started_at") or "")
+
+
+def library_order(user_id: str, states: list[SeasonState]) -> list[SeasonState]:
+    """S2 카드 순서 (v02): 보는 중(최근에 본 것 위, 이어보기 대상이 맨 위) → 새 시즌(노션 순서)
+    → 완결(먼저 끝낸 것 위, 본 순서대로)."""
+    by_id = {p["season_id"]: p for p in store.all_progress(user_id)}
+
+    def seen(s: SeasonState) -> str:
+        p = by_id.get(s.row["id"], {})
+        return p.get("last_completed_at") or p.get("started_at") or ""
+
+    live = sorted((s for s in states if s.started and not s.finished), key=seen, reverse=True)
+    new = [s for s in states if not s.started]
+    done = sorted((s for s in states if s.finished), key=seen)
+    return live + new + done

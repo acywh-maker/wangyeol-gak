@@ -88,8 +88,8 @@ def back(label: str, screen: str) -> None:
         go(screen)
 
 
-def badge(kind: str, label: str) -> str:
-    return f'<span class="wg-badge wg-badge--{kind}">{escape(label)}</span>'
+def badge(kind: str, label: str, icon: str = "") -> str:
+    return f'<span class="wg-badge wg-badge--{kind}">{ds.icon(icon) if icon else ""}{escape(label)}</span>'
 
 
 def state_for(season_id: str) -> service.SeasonState | None:
@@ -151,7 +151,7 @@ def library() -> None:
             f'<div class="wg-stat">지금까지 끝낸 회차 {store.total_completed(ss.user["user_id"])}개</div>')
     if not states:
         st.info("아직 서재에 시즌이 없어요.")
-    for s in states:
+    for s in service.library_order(ss.user["user_id"], states):
         kind, label = s.status
         progress = f"{len(s.done)}/{s.total}화" if s.started else f"{s.total}화"
         with st.container(key=f"wg-card-{s.row['id']}"):
@@ -199,14 +199,14 @@ def home() -> None:
         done = ep.index in s.done
         tags = []
         if done:
-            tags.append(badge("done-ep", "✓ 끝냄"))
+            tags.append(badge("done-ep", "읽었어요", "check"))
         elif ep.index == s.current_ep and not s.finished:
             if s.is_arrived(t):
                 tags.append(badge("arrived", "오늘의 화 도착"))
             else:
                 tags.append(badge("waiting", rules.arrival_text(t, s.arrival())))
         if ep.index in gifts:
-            tags.append(badge("gift", f"🎁 {gifts[ep.index]}"))
+            tags.append(badge("gift", gifts[ep.index], "gift"))
         cls = "wg-ep wg-ep--done" if done else ("wg-ep wg-ep--current" if ep.index == s.current_ep else "wg-ep")
         with st.container(key=f"wg-row-{ep.index}"):
             st.html(f'<div class="{cls}"><div class="wg-ep__no">{ep.index}화 · 약 {ep.minutes}분</div>'
@@ -238,8 +238,9 @@ def goal() -> None:
         saved = store.get_gifts(uid, sid)
         final = next((g for g in saved.values() if g["kind"] in ("gifticon", "letter_final")), None)
         draft.clear()
-        draft.update(season_id=sid, minutes=s.minutes, final_kind=(final or {}).get("kind", ""),
-                     gift_item=(final or {}).get("gift_item", ""),
+        draft.update(season_id=sid, minutes=s.minutes,
+                     final_letter=bool(final and (final["kind"] == "letter_final" or final.get("letter_text"))),
+                     gift_item=(final or {}).get("gift_item", "") if (final or {}).get("kind") == "gifticon" else "",
                      letters={k: g["letter_text"] for k, g in saved.items() if g.get("letter_text")})
 
     if ss.get("goal_edit"):
@@ -268,22 +269,20 @@ def goal() -> None:
         st.caption(SAVE_HINT)
 
     last = points[-1]
-    st.html('<div class="wg-label">완결하는 날 받을 선물</div>')
-    # 아이콘은 components.css에서 버튼 key로 붙인다. 고른 쪽은 메인색(primary)
+    st.html('<div class="wg-label">완주한 날의 나를 위한 선물</div>')
+    # 아이콘은 components.css에서 버튼 key로 붙인다. 고른 쪽은 메인색(primary).
+    # 편지와 기프티콘은 따로 고른다: 하나만, 또는 둘 다(기프티콘에 편지 동봉)
     with st.container(horizontal=True, key="ds-row-final"):
-        for kind, label in (("letter_final", "나에게 편지 쓰기"), ("gifticon", "기프티콘 고르기")):
-            picked = "primary" if draft["final_kind"] == kind else "secondary"
-            if st.button(label, key=f"final-{kind}", type=picked, width="stretch"):
-                draft["final_kind"] = kind
-                if kind == "gifticon":
-                    go("gift")
-                st.rerun()
-    if draft["final_kind"] == "gifticon" and draft["gift_item"]:
+        if st.button("나에게 편지 쓰기", key="final-letter_final", width="stretch",
+                     type="primary" if draft["final_letter"] else "secondary"):
+            draft["final_letter"] = not draft["final_letter"]
+            st.rerun()
+        if st.button("기프티콘 고르기", key="final-gifticon", width="stretch",
+                     type="primary" if draft["gift_item"] else "secondary"):
+            go("gift")
+    if draft["gift_item"]:
         st.caption(f"고른 선물: {draft['gift_item']} · 결제 기능은 아직 준비 중이에요")
-    if draft["final_kind"]:  # 편지만 보내기 / 기프티콘에 편지 동봉(선택)
-        with_gift = draft["final_kind"] == "gifticon"
-        if with_gift:
-            st.html('<div class="wg-label">편지도 함께 쓰기 (선택)</div>')
+    if draft["final_letter"]:
         draft["letters"][last] = st.text_area("완결한 나에게 편지 쓰기", value=draft["letters"].get(last, ""),
                                               max_chars=500, key=f"letter-{last}", label_visibility="collapsed",
                                               placeholder="완결한 나에게 편지 쓰기…")
@@ -304,13 +303,16 @@ def goal() -> None:
             for p in points[:-1]:
                 if draft["letters"].get(p, "").strip():
                     store.save_gift(uid, sid, p, "letter", letter_text=draft["letters"][p].strip(), now=ts)
-            final_letter = draft["letters"].get(last, "").strip()
-            if draft["final_kind"] == "letter_final":
-                store.save_gift(uid, sid, last, "letter_final", letter_text=final_letter, now=ts)
-            elif draft["final_kind"] == "gifticon":
+            final_letter = draft["letters"].get(last, "").strip() if draft["final_letter"] else ""
+            if draft["gift_item"]:  # 기프티콘 (편지를 썼으면 동봉)
                 store.save_gift(uid, sid, last, "gifticon", letter_text=final_letter, gift_item=draft["gift_item"], now=ts)
-            log("gift_set", sid, meta={"minutes": draft["minutes"], "final": draft["final_kind"]})
-            wrote = any(draft["letters"].get(p, "").strip() for p in points[:-1]) or (draft["final_kind"] and final_letter)
+            elif draft["final_letter"]:
+                store.save_gift(uid, sid, last, "letter_final", letter_text=final_letter, now=ts)
+            else:
+                store.delete_gift(uid, sid, last)
+            final = "both" if draft["gift_item"] and final_letter else ("gifticon" if draft["gift_item"] else ("letter_final" if draft["final_letter"] else ""))
+            log("gift_set", sid, meta={"minutes": draft["minutes"], "final": final})
+            wrote = any(draft["letters"].get(p, "").strip() for p in points[:-1]) or bool(final_letter)
             ss.pop("goal_draft", None)
             go("home", flash="편지를 저장했어요" if wrote else "")
 
@@ -328,9 +330,13 @@ def gift() -> None:
                 with st.container(key=f"wg-gift-{item}"):
                     st.html(f'<div class="wg-gift__img{" wg-gift__img--picked" if picked else ""}"></div>')
                     if st.button(item, key=f"pick-{item}", type="primary" if picked else "secondary", width="stretch"):
-                        draft["gift_item"] = item
-                        log("gift_select", draft.get("season_id", ""), meta={"item": item})
-                        ss.gift_picked = item
+                        if picked:  # 다시 누르면 기프티콘 선택 해제
+                            draft["gift_item"] = ""
+                            ss.pop("gift_picked", None)
+                        else:
+                            draft["gift_item"] = item
+                            log("gift_select", draft.get("season_id", ""), meta={"item": item})
+                            ss.gift_picked = item
                         st.rerun()
     if ss.get("gift_picked"):
         total, points = service.preview(state_for(draft["season_id"]).season, draft.get("minutes", service.DEFAULT_MINUTES))
@@ -456,8 +462,9 @@ def done() -> None:
         st.balloons()
         ss.balloons_shown = True
     last = idx >= s.total  # 마지막 화: 같은 S5를 완결용 문구로 (v02 B안, S7 대신)
-    st.html(f'<div class="wg-done"><div class="wg-done__title">{"시즌 완결!" if last else "오늘의 에피소드를 다 봤어요!"}</div>'
-            f'<div class="wg-meta">지금까지 {store.total_completed(ss.user["user_id"])}화 끝냈어요</div></div>')
+    n = store.total_completed(ss.user["user_id"])
+    st.html(f'<div class="wg-done"><div class="wg-done__title">{"시즌 완결! 오늘도 해냈어요" if last else "오늘의 에피소드를 다 봤어요!"}</div>'
+            f'<div class="wg-meta">{"첫 화 완료! 멋진 시작이에요" if n == 1 else f"지금까지 {n}화를 쌓았어요"}</div></div>')
 
     def steps(label: str, filled: int, cells: int) -> None:  # 한 화에 한 칸: [■■■□□□□□]
         row = "".join(f'<span class="wg-steps__cell{" is-done" if i < filled else ""}"></span>' for i in range(cells))
@@ -467,8 +474,8 @@ def done() -> None:
     if last:
         steps(f"{s.total}화를 모두 봤어요", s.total, s.total)
     elif nxt:
-        point, left, kind = nxt
-        steps(f"{left}화만 더 보면 {'중간' if kind == 'mid' else '완결'} 선물이에요", idx, point)
+        point, left, _ = nxt
+        steps(f"{left}화를 더 보면 선물이 기다려요", idx, point)
 
     gift = store.get_gifts(ss.user["user_id"], s.row["id"]).get(idx) if idx in s.points else None
     if gift:

@@ -196,6 +196,16 @@ def save_gift(user_id: str, season_id: str, ep_index: int, kind: str, letter_tex
              "delivered_at": ""})
 
 
+def delete_gift(user_id: str, season_id: str, ep_index: int) -> None:
+    with _LOCK:
+        data = _load()
+        keep = [r for r in data["gifts"]
+                if not (r["user_id"] == user_id and r["season_id"] == season_id and r["ep_index"] == ep_index)]
+        if len(keep) != len(data["gifts"]):
+            data["gifts"] = keep
+            _save(data)
+
+
 def mark_gift_delivered(user_id: str, season_id: str, ep_index: int, now: str) -> bool:
     """처음 도착 처리면 True."""
     rows = _rows("gifts", user_id=user_id, season_id=season_id, ep_index=ep_index)

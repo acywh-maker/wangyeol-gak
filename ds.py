@@ -39,9 +39,15 @@ def icon_slug(path: Path) -> str:
     return re.sub(r"[^a-z0-9]+", "-", path.stem.lower()).strip("-")
 
 
+def is_color_svg(svg: str) -> bool:
+    paints = re.findall(r'(?:fill|stroke)="([^"]+)"', svg)
+    return any(c.lower() not in ("none", "black", "#000", "#000000", "currentcolor") for c in paints)
+
+
 def icons_css() -> str:
     """Icon/*.svg -> --icon-이름(마스크 이미지) + .wg-icon--이름(원본 크기).
-    색은 SVG가 아니라 글자색(currentColor)이나 지정한 색을 따른다."""
+    색은 SVG가 아니라 글자색(currentColor)이나 지정한 색을 따른다.
+    검정 말고 다른 색이 칠해진 SVG(예: gift)는 원래 색 그대로 그린다."""
     rules = []
     for p in sorted(ICON_DIR.glob("*.svg")):
         svg = p.read_text(encoding="utf-8")
@@ -51,6 +57,9 @@ def icons_css() -> str:
         if w and h:
             rules.append(f".wg-icon--{slug} {{ width: {w[1]}px; height: {h[1]}px; aspect-ratio: {w[1]} / {h[1]}; "
                          f"--icon: var(--icon-{slug}); }}")
+        if is_color_svg(svg):
+            rules.append(f".wg-icon.wg-icon--{slug} {{ background: var(--icon) no-repeat center / contain; "
+                         f"-webkit-mask: none; mask: none; }}")
     return "\n".join(rules)
 
 
