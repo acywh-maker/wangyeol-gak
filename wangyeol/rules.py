@@ -23,19 +23,33 @@ def arrival_after(completed_at: datetime) -> datetime:
     return datetime(day.year, day.month, day.day, ARRIVAL_HOUR, tzinfo=KST)
 
 
-def wait_text(now: datetime, arrival: datetime) -> str:
-    """7장 1번: 1시간 이상 'n시간 후', 1시간 미만 'n분 후'. 초 단위 없음."""
-    sec = (arrival - now).total_seconds()
-    if sec >= 3600:
-        return f"{int(sec // 3600)}시간 후"
-    return f"{max(1, math.ceil(sec / 60))}분 후"
+def remain_text(now: datetime, arrival: datetime) -> str:
+    """도착까지 남은 시간 (v02 사용자 지정, 모든 화면): '14시간 30분 남음', 1시간 미만 '30분 남음'.
+    매일 같은 시간을 알려 주는 정보형 — 초 단위 카운트다운은 없음(7장 1번)."""
+    mins = max(1, math.ceil((arrival - now).total_seconds() / 60))
+    h, m = divmod(mins, 60)
+    return f"{h}시간 {m}분 남음" if h else f"{m}분 남음"
+
+
+def clock_text(t: datetime) -> str:
+    """'오전 6시', '오후 9시 30분'"""
+    h12 = t.hour % 12 or 12
+    return f"{'오전' if t.hour < 12 else '오후'} {h12}시" + (f" {t.minute}분" if t.minute else "")
+
+
+def day_text(now: datetime, t: datetime) -> str:
+    days = (t.date() - now.date()).days
+    return {0: "오늘", 1: "내일"}.get(days, f"{t.month}월 {t.day}일")
 
 
 def arrival_text(now: datetime, arrival: datetime) -> str:
-    """S5·시즌 홈: '내일 06:00 도착 · 14시간 후'"""
-    days = (arrival.date() - now.date()).days
-    day = {0: "오늘", 1: "내일"}.get(days, f"{arrival.month}월 {arrival.day}일")
-    return f"{day} {arrival:%H:%M} 도착 · {wait_text(now, arrival)}"
+    """시즌 홈 회차 목록: '내일 오전 6시 도착 · 14시간 30분 남음'"""
+    return f"{day_text(now, arrival)} {clock_text(arrival)} 도착 · {remain_text(now, arrival)}"
+
+
+def arrival_sentence(now: datetime, arrival: datetime, ep_no: int) -> str:
+    """S5 다음 화 안내: '내일 오전 6시에 2화가 도착해요 · 14시간 30분 남음'"""
+    return f"{day_text(now, arrival)} {clock_text(arrival)}에 {ep_no}화가 도착해요 · {remain_text(now, arrival)}"
 
 
 def season_status(started: bool, completed: int, total: int, current_ep: int,
@@ -50,7 +64,7 @@ def season_status(started: bool, completed: int, total: int, current_ep: int,
     arrival = arrival_after(last_completed_at)
     if now >= arrival:
         return "arrived", "오늘의 화 도착"
-    return "waiting", f"{wait_text(now, arrival)} 도착"
+    return "waiting", remain_text(now, arrival)
 
 
 def gift_points(total: int) -> list[int]:

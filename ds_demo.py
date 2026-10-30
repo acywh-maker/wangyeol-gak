@@ -41,7 +41,7 @@ for name in ("display", "title-lg", "title-md", "title-sm", "body-lg", "body-md"
 st.subheader("배지")
 st.html('<div style="display:flex;flex-wrap:wrap;gap:8px">'
         '<span class="wg-badge wg-badge--arrived">오늘의 화 도착</span>'
-        '<span class="wg-badge wg-badge--waiting">14시간 후 도착</span>'
+        '<span class="wg-badge wg-badge--waiting">14시간 30분 남음</span>'
         '<span class="wg-badge wg-badge--done">완결</span>'
         '<span class="wg-badge wg-badge--new">새 시즌</span>'
         '<span class="wg-badge wg-badge--done-ep">✓ 끝냄</span>'
@@ -58,7 +58,7 @@ st.html('<div class="wg-ep wg-ep--done"><div class="wg-ep__no">1화 · 약 10분
         '<div class="wg-ep__tags"><span class="wg-badge wg-badge--done-ep">✓ 끝냄</span></div></div>'
         '<div class="wg-ep wg-ep--current"><div class="wg-ep__no">2화 · 약 10분</div>'
         '<div class="wg-ep__title">2. 환경: 믿을 수 있는 숫자</div>'
-        '<div class="wg-ep__tags"><span class="wg-badge wg-badge--waiting">내일 06:00 도착 · 14시간 후</span>'
+        '<div class="wg-ep__tags"><span class="wg-badge wg-badge--waiting">내일 오전 6시 도착 · 14시간 30분 남음</span>'
         '<span class="wg-badge wg-badge--gift">◆ 중간 선물</span></div></div>'
         '<div class="wg-ep"><div class="wg-ep__no">3화 · 약 9분</div><div class="wg-ep__title">3. 실행: 리듬대로</div></div>')
 

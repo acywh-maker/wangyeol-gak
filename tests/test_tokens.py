@@ -25,7 +25,9 @@ def test_components_use_only_semantic_tokens():
 
 
 def test_every_var_used_is_defined():
-    defined = set(re.findall(r"(--[\w-]+):", (ROOT / "tokens.css").read_text(encoding="utf-8")))
+    import ds  # 아이콘 변수(--icon-이름)는 ds.icons_css()가 Icon/ 폴더에서 만든다
+    sources = [(ROOT / f).read_text(encoding="utf-8") for f in ("tokens.css", "components.css")] + [ds.icons_css()]
+    defined = set(re.findall(r"(--[\w-]+):", "\n".join(sources)))
     for f in ("tokens.css", "components.css"):
         used = set(re.findall(r"var\((--[\w-]+)\)", (ROOT / f).read_text(encoding="utf-8")))
         assert used <= defined, f"{f}: 정의 안 된 변수 {sorted(used - defined)}"

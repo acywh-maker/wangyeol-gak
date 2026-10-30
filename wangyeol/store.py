@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -35,6 +36,13 @@ def _save(data: dict) -> None:
     _PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = _PATH.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    # Windows: 백신·검색 색인이 store.json을 잠깐 열고 있으면 바꿔치기가 거부된다 → 잠깐 기다렸다 다시
+    for wait in (0.05, 0.1, 0.2, 0.4, 0.8):
+        try:
+            tmp.replace(_PATH)
+            return
+        except PermissionError:
+            time.sleep(wait)
     tmp.replace(_PATH)
 
 

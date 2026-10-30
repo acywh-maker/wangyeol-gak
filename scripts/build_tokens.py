@@ -152,7 +152,6 @@ backgroundColor = "{c('semantic', 'bg', 'subtle')}"
 toolbarMode = "viewer"
 
 [server]
-port = 8510  # 8501은 다른 프로젝트가 쓰고 있어서 완결각은 고정 포트 사용
 """
 
 

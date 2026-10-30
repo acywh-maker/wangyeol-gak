@@ -117,8 +117,9 @@ def entry() -> None:
             '<div class="wg-hero__sub">쌓아 둔 노트를 웹소설처럼 하루 한 화씩</div></div>')
     # 폼: 입력값과 버튼이 한 번에 제출되도록 (모바일에서 마지막 입력이 누락되지 않게)
     with st.form("entry", border=False):
-        nickname = st.text_input("닉네임 (2~12자)", max_chars=12)
-        pin = st.text_input("PIN 4자리", type="password", max_chars=4)
+        with st.container(key="wg-fields"):
+            nickname = st.text_input("닉네임 (2~12자)", max_chars=12)
+            pin = st.text_input("PIN 4자리", type="password", max_chars=4)
         st.caption("처음이면 자동으로 가입돼요")
         with st.container(key="ds-cta"):
             submit = st.form_submit_button("시작하기", type="primary", width="stretch")
@@ -189,7 +190,7 @@ def home() -> None:
         st.toast(ss.pop("flash"), icon="✉️")
     st.html(f'<div class="wg-title">{escape(s.row["title"])}</div>'
             f'<div class="wg-meta">하루 {s.minutes}분 · {len(s.done)}/{s.total}화</div>')
-    if st.button("목표·선물 바꾸기", type="tertiary"):
+    if st.button("목표·선물 바꾸기 ›", type="tertiary", key="goal-edit"):
         go("goal", goal_edit=True)
 
     t = now()
@@ -205,7 +206,7 @@ def home() -> None:
             else:
                 tags.append(badge("waiting", rules.arrival_text(t, s.arrival())))
         if ep.index in gifts:
-            tags.append(badge("gift", f"◆ {gifts[ep.index]}"))
+            tags.append(badge("gift", f"🎁 {gifts[ep.index]}"))
         cls = "wg-ep wg-ep--done" if done else ("wg-ep wg-ep--current" if ep.index == s.current_ep else "wg-ep")
         with st.container(key=f"wg-row-{ep.index}"):
             st.html(f'<div class="{cls}"><div class="wg-ep__no">{ep.index}화 · 약 {ep.minutes}분</div>'
@@ -243,23 +244,21 @@ def goal() -> None:
 
     if ss.get("goal_edit"):
         back("시즌 홈", "home")
-    st.html('<div class="wg-title">목표를 정하고, 해낸 나에게 줄<br>선물도 골라봐요!</div>')
+    st.html(f'<div class="wg-title">목표를 정하고, 해낸 나에게 줄<br>선물도 준비해요{ds.icon("fantasybook", "wg-icon--deco")}</div>')
 
     st.html('<div class="wg-label">하루에 얼마나 볼까요?</div>')
-    options = [f"{m}분" for m in MINUTE_CHOICES] + ["직접 입력"]
-    current = f"{draft['minutes']}분" if draft["minutes"] in MINUTE_CHOICES else "직접 입력"
+    # v02: 직접 입력 없앰. 예전에 직접 입력한 값(예: 25분)이면 아무 칩도 선택되지 않은 채 그 값을 유지
+    options = [f"{m}분" for m in MINUTE_CHOICES]
+    current = f"{draft['minutes']}분" if draft["minutes"] in MINUTE_CHOICES else None
     pick = st.pills("하루 가용시간", options, default=current, label_visibility="collapsed", key="goal-minutes")
-    if pick == "직접 입력":
-        draft["minutes"] = int(st.number_input("분", min_value=5, max_value=180, step=5,
-                                               value=max(5, min(180, draft["minutes"]))))
-    elif pick:
+    if pick:
         draft["minutes"] = int(pick.removesuffix("분"))
 
     total, points = service.preview(s.season, draft["minutes"])
-    marks = " · ".join(f"◆ {p}화 {'완결' if p == points[-1] else '중간'} 선물" for p in points)
+    # 하루 한 화라서 완결까지 걸리는 날 = 화 수
     st.html(f'<div class="wg-goal"><div class="wg-label">목표</div>'
-            f'<div class="wg-goal__main">{escape(s.row["title"])} · {total}화 완결</div>'
-            f'<div class="wg-meta">하루 {draft["minutes"]}분이면 {total}화 · {marks}</div></div>')
+            f'<div class="wg-goal__main">{escape(s.row["title"])}</div>'
+            f'<div class="wg-meta">총 {total}화 · 하루 {draft["minutes"]}분 · {total}일 뒤 완결</div></div>')
 
     for p in points[:-1]:
         st.html(f'<div class="wg-label">중간 선물 · {p}화</div>')
@@ -269,11 +268,12 @@ def goal() -> None:
         st.caption(SAVE_HINT)
 
     last = points[-1]
-    st.html(f'<div class="wg-label">완결 선물 · {last}화</div>')
+    st.html('<div class="wg-label">완결하는 날 받을 선물</div>')
+    # 아이콘은 components.css에서 버튼 key로 붙인다. 고른 쪽은 메인색(primary)
     with st.container(horizontal=True, key="ds-row-final"):
-        for kind, label in (("letter_final", "편지만 보내기"), ("gifticon", "기프티콘 고르기")):
-            mark = "✓ " if draft["final_kind"] == kind else ""
-            if st.button(mark + label, key=f"final-{kind}", width="stretch"):
+        for kind, label in (("letter_final", "나에게 편지 쓰기"), ("gifticon", "기프티콘 고르기")):
+            picked = "primary" if draft["final_kind"] == kind else "secondary"
+            if st.button(label, key=f"final-{kind}", type=picked, width="stretch"):
                 draft["final_kind"] = kind
                 if kind == "gifticon":
                     go("gift")
@@ -290,7 +290,7 @@ def goal() -> None:
         st.caption(SAVE_HINT)
 
     # 처음: 저장 없이 시작(10분) / 수정 중: 바꾸지 않고 시즌 홈으로
-    if st.button("다음에 정할게요", type="tertiary"):
+    if st.button("다음에 정할게요", type="tertiary", key="later"):
         if not ss.get("goal_edit"):
             service.start_or_update(uid, s, service.DEFAULT_MINUTES, now())
             log("gift_skip", sid)
@@ -298,7 +298,7 @@ def goal() -> None:
         go("home")
 
     with st.container(key="ds-cta"):
-        if st.button("이대로 약속하기", type="primary", width="stretch"):
+        if st.button("이대로 약속하기", type="primary", width="stretch", key="promise"):
             service.start_or_update(uid, s, draft["minutes"], now())
             ts = now().isoformat()
             for p in points[:-1]:
@@ -324,9 +324,10 @@ def gift() -> None:
     for row in (items[:2], items[2:]):
         with st.container(horizontal=True, key=f"ds-row-gift-{row[0]}"):
             for item in row:
+                picked = draft.get("gift_item") == item  # 고른 상품: 이미지 테두리 + 버튼 메인색
                 with st.container(key=f"wg-gift-{item}"):
-                    st.html('<div class="wg-gift__img"></div>')
-                    if st.button(item, key=f"pick-{item}", width="stretch"):
+                    st.html(f'<div class="wg-gift__img{" wg-gift__img--picked" if picked else ""}"></div>')
+                    if st.button(item, key=f"pick-{item}", type="primary" if picked else "secondary", width="stretch"):
                         draft["gift_item"] = item
                         log("gift_select", draft.get("season_id", ""), meta={"item": item})
                         ss.gift_picked = item
@@ -336,9 +337,10 @@ def gift() -> None:
         st.html(f'<div class="wg-notice"><div class="wg-notice__title">선물이 선택됐어요</div>'
                 f'<div>{escape(ss.gift_picked)} · {points[-1]}화 완결 때 도착해요. '
                 f'결제 기능은 아직 준비 중이에요. 관심 가져 주셔서 고마워요!</div></div>')
-        if st.button("확인", type="primary", width="stretch"):
-            ss.pop("gift_picked")
-            go("goal")
+        with st.container(key="ds-cta"):  # 다른 화면처럼 하단 바
+            if st.button("확인", type="primary", width="stretch"):
+                ss.pop("gift_picked")
+                go("goal")
 
 
 # ---------- S4 회차 ----------
@@ -366,9 +368,10 @@ def episode() -> None:
     top_bar("시즌 홈", "home")
 
     # 1. 뷰어식 첫머리
-    st.html(f'<div class="wg-viewer-head"><div class="wg-viewer-head__no">{escape(s.row["title"])} · {idx}화</div>'
+    # v02: 위 = 회차·분량, 아래 = 시즌 제목 (사용자 지정)
+    st.html(f'<div class="wg-viewer-head"><div class="wg-viewer-head__no">{idx}화 · 약 {ep.minutes}분</div>'
             f'<div class="wg-viewer-head__title">{escape(ep.title)}</div>'
-            f'<div class="wg-viewer-head__min">약 {ep.minutes}분</div></div>')
+            f'<div class="wg-viewer-head__min">{escape(s.row["title"])}</div></div>')
 
     # 2. 지난 화 예측 결과
     if idx > 1:
@@ -432,7 +435,8 @@ def episode() -> None:
 
     # 9. 원문 링크
     first_blocks = units[ep.segments[0].unit].blocks
-    st.markdown(f"[노션에서 원문 보기 ↗]({s.season.block_url(first_blocks[0]['id'] if first_blocks else None)})")
+    with st.container(key="wg-source"):  # 본문(19)보다 작게, 키우기 전 크기 16
+        st.markdown(f"[노션에서 원문 보기 ↗]({s.season.block_url(first_blocks[0]['id'] if first_blocks else None)})")
 
     if DEV:
         with st.sidebar:
@@ -451,31 +455,36 @@ def done() -> None:
     if not ss.get("balloons_shown"):
         st.balloons()
         ss.balloons_shown = True
-    st.html(f'<div class="wg-done"><div class="wg-done__title">오늘 몫 끝!</div>'
-            f'<div class="wg-meta">지금까지 끝낸 회차 {store.total_completed(ss.user["user_id"])}개</div></div>')
+    last = idx >= s.total  # 마지막 화: 같은 S5를 완결용 문구로 (v02 B안, S7 대신)
+    st.html(f'<div class="wg-done"><div class="wg-done__title">{"시즌 완결!" if last else "오늘의 에피소드를 다 봤어요!"}</div>'
+            f'<div class="wg-meta">지금까지 {store.total_completed(ss.user["user_id"])}화 끝냈어요</div></div>')
+
+    def steps(label: str, filled: int, cells: int) -> None:  # 한 화에 한 칸: [■■■□□□□□]
+        row = "".join(f'<span class="wg-steps__cell{" is-done" if i < filled else ""}"></span>' for i in range(cells))
+        st.html(f'<div class="wg-label">{label}</div><div class="wg-steps">{row}</div>')
 
     nxt = rules.next_gift(s.points, idx)
-    if nxt:
+    if last:
+        steps(f"{s.total}화를 모두 봤어요", s.total, s.total)
+    elif nxt:
         point, left, kind = nxt
-        name = "중간 선물(편지)" if kind == "mid" else "완결 선물"
-        st.html(f'<div class="wg-label">{name}까지 {left}화 남음</div>')
-        st.progress(min(1.0, idx / point))
+        steps(f"{left}화만 더 보면 {'중간' if kind == 'mid' else '완결'} 선물이에요", idx, point)
 
     gift = store.get_gifts(ss.user["user_id"], s.row["id"]).get(idx) if idx in s.points else None
     if gift:
-        if st.button("선물 확인하기", type="primary", width="stretch"):
+        if st.button("선물 확인하기", type="primary", width="stretch", key="gift-open"):
             go("gift_arrived")
         return
 
     if idx < s.total:
         arr = s.arrival()
-        st.html(f'<div class="wg-box-plain"><div class="wg-label">다음 화</div>'
-                f'<div>{idx + 1}화는 {rules.arrival_text(now(), arr) if arr else "지금 볼 수 있어요"}</div></div>')
+        text = rules.arrival_sentence(now(), arr, idx + 1) if arr else f"{idx + 1}화를 지금 볼 수 있어요"
+        st.html(f'<div class="wg-box-plain"><div class="wg-label">다음 화</div><div>{text}</div></div>')
     with st.container(horizontal=True, key="ds-row-done"):
-        if idx < s.total and st.button("지금 열기", width="stretch"):
-            open_episode(s, idx + 1)
         if st.button("서재로", width="stretch"):
             go("library")
+        if idx < s.total and st.button("미리 열기", width="stretch"):
+            open_episode(s, idx + 1)
 
 
 def gift_arrived() -> None:
@@ -497,7 +506,7 @@ def gift_arrived() -> None:
                f'<div class="wg-stamp">선물 도착</div></div>') if g["kind"] == "gifticon" else ""
         body = box + letter  # 기프티콘에 편지를 동봉했으면 둘 다
         st.html(f'<div class="wg-title">스스로 정한 목표를 끝까지 지킨 {nick}님.<br>정말 대단해요, 약속한 선물이에요.<br>축하드려요!</div>{body}')
-    if st.button("서재로", type="primary", width="stretch"):  # S7 완결 리포트는 Day 3
+    if st.button("서재로", type="primary", width="stretch", key="to-library"):  # S7 완결 리포트는 Day 3
         go("library")
 
 

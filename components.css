@@ -2,8 +2,14 @@
    완결각 화면 부품 — tokens.css 뒤에 불러온다 (ds.apply).
    색·크기는 var(--의미 토큰)만 쓴다. 기본 값(--gray-*, --brand-*)을 직접 쓰지 않는다.
    ========================================================================== */
-/* 읽기 앱이라 본문 폭과 글자 크기를 키운다 */
-[data-testid="stMainBlockContainer"] { max-width: var(--reading-max); }
+/* 읽기 앱이라 본문 폭과 글자 크기를 키운다. 맨 위 여백은 모든 화면 같게 (v02) */
+[data-testid="stMainBlockContainer"] { max-width: var(--reading-max); padding-top: var(--page-top); }
+
+/* SVG 아이콘 (ds.icon): 모양은 마스크, 색은 글자색을 따른다 */
+.wg-icon { display: inline-block; vertical-align: middle; flex: none; background-color: currentColor;
+  -webkit-mask: var(--icon) no-repeat center / contain; mask: var(--icon) no-repeat center / contain; }
+.wg-icon--deco { color: var(--text-deco); }
+.wg-title .wg-icon--deco { height: var(--title-icon-height); width: auto; margin-left: var(--space-2); }
 .stMarkdown p, .stMarkdown li { font-size: var(--fs-body-lg); line-height: 1.7; color: var(--text-primary); }
 .stMarkdown, .stMarkdown p, .stMarkdown li { overflow-wrap: anywhere; word-break: keep-all; }
 .stMarkdown a { word-break: break-all; }
@@ -21,7 +27,7 @@ img, iframe, video { max-width: 100%; }
 }
 .wg-card-title {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  font-size: var(--fs-title-sm); line-height: var(--lh-title-sm); font-weight: 700; color: var(--text-on-surface);
+  font-size: var(--fs-card-title); line-height: var(--lh-card-title); font-weight: 700; color: var(--text-on-surface);
 }
 [class*="st-key-wg-summary"] { background: var(--bg-notice); border-radius: var(--radius-md); padding: var(--space-6); }
 [class*="st-key-wg-box"] { background: var(--bg-box); border: 1px solid var(--line-strong); border-radius: var(--radius-md); padding: var(--space-6); }
@@ -33,8 +39,9 @@ img, iframe, video { max-width: 100%; }
 /* 테마 표시용 빈 요소 (body:has(.wg-theme-dark)) — 자리 차지 안 함 */
 [data-testid="stElementContainer"]:has(.wg-theme-dark) { display: none; }
 
-/* 로그인 쿠키를 쓰는 보이지 않는 iframe */
+/* 로그인 쿠키를 쓰는 보이지 않는 iframe. 감싼 틀도 흐름에서 빼서 맨 위 간격이 생기지 않게 */
 .st-key-wg-cookie { position: absolute; width: 0; height: 0; overflow: hidden; }
+[data-testid="stLayoutWrapper"]:has(> .st-key-wg-cookie) { position: absolute; }
 
 /* 카드·행 전체 탭: 안쪽 버튼을 카드 위에 투명하게 덮는다 (버튼 글자는 화면 낭독용) */
 [class*="st-key-wg-card"], [class*="st-key-wg-row"] { position: relative; }
@@ -44,6 +51,8 @@ img, iframe, video { max-width: 100%; }
 [class*="st-key-wg-card"] .stButton button, [class*="st-key-wg-row"] .stButton button {
   width: 100%; height: 100%; opacity: 0; cursor: pointer;
 }
+/* 카드: 덮개 버튼 자리가 아래 간격을 만들지 않게 → 위아래 여백이 같아진다 (v02) */
+[class*="st-key-wg-card"] [data-testid="stElementContainer"]:has(.stButton) { display: contents; }
 .wg-card-meta { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-4);
   font-size: var(--fs-body-md); color: var(--text-on-surface-muted); }
 /* 완결 시즌 카드: 흐리게 (사용자 시안) */
@@ -80,12 +89,29 @@ img, iframe, video { max-width: 100%; }
 .wg-hero { padding: var(--space-11) 0 var(--space-9); }
 .wg-hero__title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 700; }
 .wg-hero__sub { font-size: var(--fs-body-lg); color: var(--text-tertiary); margin-top: var(--space-4); }
+/* S1 입력 필드: 높이와 필드 사이 간격 (v02 사용자 지정) */
+.st-key-wg-fields { gap: var(--field-gap); }
+.st-key-wg-fields [data-testid="stTextInputRootElement"] { height: var(--input-height); }
 .wg-done { text-align: center; padding: var(--space-10) 0 var(--space-8); }
+/* S5 선물까지 진행: 한 화에 한 칸 */
+.wg-steps { display: flex; gap: var(--space-1); margin: var(--space-2) 0 var(--space-6); }
+.wg-steps__cell { flex: 1; height: var(--space-4); border-radius: var(--radius-xs); background: var(--line-strong); }
+.wg-steps__cell.is-done { background: var(--action-primary); }
+.st-key-wg-source .stMarkdown p { font-size: var(--fs-body-md); }
 .wg-done__title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 700; margin-bottom: var(--space-4); }
+/* 한글은 낱말 단위로 줄바꿈 ('봤어/요', '남/음' 방지) */
+.wg-done__title, .wg-box-plain { word-break: keep-all; }
 .wg-goal, .wg-box-plain, .wg-letter, .wg-notice { background: var(--bg-notice); border-radius: var(--radius-md); padding: var(--space-6); margin: var(--space-4) 0; }
 .wg-goal__main { font-size: var(--fs-title-sm); font-weight: 700; margin-bottom: var(--space-2); }
 .wg-notice__title { font-size: var(--fs-title-sm); font-weight: 700; margin-bottom: var(--space-2); }
-.wg-gift__img { aspect-ratio: 1 / 1; background: var(--bg-placeholder); border-radius: var(--radius-sm); margin-bottom: var(--space-3); }
+.wg-gift__img { aspect-ratio: 1 / 1; background: var(--bg-placeholder); border-radius: var(--radius-sm); margin-bottom: var(--space-3);
+  outline: 2px solid transparent; outline-offset: -2px; transition: outline-color var(--dur-fast) var(--ease-standard); }
+.wg-gift__img--picked { outline-color: var(--action-primary); }
+/* 선물 카드 전체 탭: 상품 버튼은 보이게 두고, 버튼의 누르는 영역(::after)만 카드 전체로 넓힌다 */
+[class*="st-key-wg-gift-"] { position: relative; cursor: pointer; }
+[class*="st-key-wg-gift-"] [data-testid="stElementContainer"]:has(.stButton),
+[class*="st-key-wg-gift-"] .stButton, [class*="st-key-wg-gift-"] .stButton * { position: static; }
+[class*="st-key-wg-gift-"] .stButton button::after { content: ""; position: absolute; inset: 0; z-index: 1; }
 .wg-gift-box { text-align: center; padding: var(--space-8); border: 1px solid var(--line-default); border-radius: var(--radius-xl); position: relative; }
 .wg-gift-box .wg-gift__img { width: 60%; margin: 0 auto var(--space-5); }
 .wg-stamp { display: inline-block; margin-top: var(--space-5); padding: var(--space-3) var(--space-6);
@@ -94,3 +120,25 @@ img, iframe, video { max-width: 100%; }
 /* S6 완결 선물 두 선택지: 글자가 길어도 잘리지 않게 줄바꿈, 두 버튼 같은 높이 (PRD 7장 8번) */
 .st-key-ds-row-final button { min-height: 56px; height: 100%; }
 .st-key-ds-row-final button p { white-space: normal; }
+/* 선물 버튼: 아이콘 + 미디엄 글자, 고른 쪽은 primary(메인색) (v02) */
+.st-key-ds-row-final button p { display: inline-flex; align-items: center; gap: var(--space-3); font-weight: var(--fw-medium); }
+.st-key-ds-row-final button p::before { content: ""; width: var(--button-icon); height: var(--button-icon); flex: none; background-color: currentColor;
+  -webkit-mask: var(--icon) no-repeat center / contain; mask: var(--icon) no-repeat center / contain; }
+.st-key-final-letter_final button p::before { --icon: var(--icon-letter); }
+.st-key-final-gifticon button p::before { --icon: var(--icon-giftb-box); }
+
+/* 라이트/다크 모드 버튼은 14 유지, 입력칸 글자는 기본 UI 글자(16)와 같게 (v02) */
+.st-key-theme-toggle button p { font-size: var(--fs-ui-sm); }
+.stApp input, .stApp textarea { font-size: var(--fs-body-md); }
+
+/* 칩 사이 간격: S6 시간, 선물 종류(커피·디저트) */
+.st-key-goal-minutes [data-testid="stButtonGroup"] > div,
+.st-key-gift-tab [data-testid="stButtonGroup"] > div { gap: var(--pill-gap); }
+
+/* 다음에 정할게요(S6), 목표·선물 바꾸기(시즌 홈): 탭 영역을 44로 키운다. 글자 위치는 그대로 두려고 늘린 만큼 왼쪽으로 당긴다 (v02) */
+.st-key-later button, .st-key-goal-edit button { min-height: var(--tap-min); padding: 0 var(--space-5); margin-left: calc(-1 * var(--space-5)); }
+.st-key-later button p, .st-key-goal-edit button p { white-space: nowrap; }
+
+/* 주요 버튼(하단 바 + 본문 끝 주황 버튼): 17 미디엄 (v02) */
+.st-key-ds-cta button p, .st-key-done button p, .st-key-gift-open button p, .st-key-to-library button p {
+  font-size: var(--fs-cta); font-weight: var(--fw-medium); }
