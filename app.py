@@ -233,8 +233,11 @@ def comeback() -> None:
             '<div class="wg-stat">쉬어 간 날도 이야기의 일부예요. 이어 볼까요?</div>')
     steps(f'{escape(s.row["title"])} · {len(s.done)}/{s.total}화', len(s.done), s.total)
     # 두 버튼 같은 크기·같은 스타일 (PRD 7장 8번). S3-b 지난 이야기는 만들지 않음 (v03 사용자 확정)
+    # → 다음 화(S4)로 바로 간다. 그 화에 1분 요약(노션 콜아웃)이 있으면 S4 맨 위에 나오므로 문구로 알려 준다
+    has_summary = s.next_ep is not None and s.next_ep.summary_unit is not None
     with st.container(key="wg-comeback"):
-        if st.button(f"이어서 {s.current_ep}화 보기", width="stretch", key="comeback-resume"):
+        if st.button("1분 요약 보고 이어보기" if has_summary else f"이어서 {s.current_ep}화 보기",
+                     width="stretch", key="comeback-resume"):
             log("return_choice_resume", sid, s.current_ep)
             open_episode(s, s.current_ep)
         if st.button("1화부터 다시 보기", width="stretch", key="comeback-restart"):
