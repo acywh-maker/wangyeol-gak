@@ -86,6 +86,9 @@ img, iframe, video { max-width: 100%; }
 .wg-ep--done .wg-ep__title, .wg-ep--done .wg-ep__no { color: var(--status-read-fg); }
 .wg-ep--current { padding-left: var(--space-5); padding-right: var(--space-5); }
 
+/* S4 '지난 화 내 한 줄 보기': 테두리 없음 (v03 2차 사용자 지정. 노션 토글은 그대로) */
+.stApp .st-key-wg-prev-line [data-testid="stExpander"] details { border-color: transparent; }  /* 펼쳤을 때 제목 아래 가로선은 유지 */
+
 /* 뷰어식 첫머리 */
 .wg-viewer-head { text-align: left; padding: var(--space-9) 0 var(--space-8); border-bottom: 1px solid var(--line-default); margin-bottom: var(--space-8); }
 .wg-viewer-head__no { font-size: var(--fs-body-md); color: var(--text-tertiary); }

@@ -464,7 +464,7 @@ def episode() -> None:
         # 3. 지난 화 내 한 줄 보기
         prev_line = store.get_line(uid, sid, idx - 1)
         if prev_line:
-            with st.expander("지난 화 내 한 줄 보기"):
+            with st.container(key="wg-prev-line"), st.expander("지난 화 내 한 줄 보기"):  # 테두리 없음 (v03 2차)
                 st.write(prev_line)
 
     # 4. 1분 요약
