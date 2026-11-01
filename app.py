@@ -65,7 +65,7 @@ def theme() -> str:
 def theme_toggle() -> None:
     """라이트/다크 전환. 사용자별로 저장된다."""
     dark = theme() == "dark"
-    if st.button("라이트로 보기" if dark else "다크로 보기", type="tertiary", key="theme-toggle"):
+    if st.button("☀️ 라이트로 보기" if dark else "🌙 다크로 보기", type="tertiary", key="theme-toggle"):  # 이모지 다시 (v03 2차 사용자 지정)
         new = "light" if dark else "dark"
         store.set_theme(ss.user["user_id"], new)
         ss.user = {**ss.user, "theme": new}
