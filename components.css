@@ -30,7 +30,7 @@ img, iframe, video { max-width: 100%; }
 [class*="st-key-wg-card"] { padding: var(--space-7); }
 /* 테두리는 '오늘의 화 도착' 카드·회차에만 (v03 2차 사용자 지정). 크기가 변하지 않게 색만 뺀다 */
 [class*="st-key-wg-card"]:not(:has(.wg-badge--arrived)), .wg-ep--current:not(:has(.wg-badge--arrived)),
-.wg-goal, .wg-letter { border-color: transparent; }
+.wg-goal, .wg-letter, .wg-notice { border-color: transparent; }
 .wg-card-title {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   font-size: var(--fs-card-title); line-height: var(--lh-card-title); font-weight: 700; color: var(--text-on-surface);
