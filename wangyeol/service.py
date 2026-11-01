@@ -9,6 +9,8 @@ from .parser import Season
 from .planner import Episode
 
 DEFAULT_MINUTES = 10  # S6를 건너뛰었을 때 (기본값)
+COMEBACK_DAYS = 3  # BR-003: 마지막 완료 후 며칠이면 S3 복귀 선택 (기본값)
+REPORT_MIN_EPISODES = 10  # S7 완결 리포트는 10화 이상 시즌을 완결하고 한 줄을 남겼을 때만 (사용자 확정)
 
 
 @dataclass
@@ -22,6 +24,7 @@ class SeasonState:
     last_completed_at: datetime | None = None
     status: tuple[str, str] = ("new", "새 시즌")
     points: list[int] = field(default_factory=list)
+    lines: dict[int, str] = field(default_factory=dict)  # 오늘의 한 줄 {회차: 글}
 
     @property
     def started(self) -> bool:
@@ -54,6 +57,17 @@ class SeasonState:
         arr = self.arrival()
         return arr is None or now >= arr
 
+    def away_days(self, now: datetime) -> int:
+        """S3 표시 조건(FR-008): 보는 중인 시즌의 마지막 완료 후 3일 이상이면 그 날 수, 아니면 0."""
+        if not self.started or self.finished or self.last_completed_at is None:
+            return 0
+        days = rules.days_since(self.last_completed_at, now)
+        return days if days >= COMEBACK_DAYS else 0
+
+    @property
+    def has_report(self) -> bool:
+        return self.finished and self.total >= REPORT_MIN_EPISODES and any(i <= self.total for i in self.lines)
+
 
 def load_state(user_id: str, row: dict, now: datetime) -> SeasonState:
     season = notion.load_season(row)
@@ -76,6 +90,7 @@ def load_state(user_id: str, row: dict, now: datetime) -> SeasonState:
         state.current_ep = max(1, min(progress.get("current_ep") or 1, len(episodes) + 1))
         state.last_completed_at = rules.parse_ts(progress.get("last_completed_at"))
     state.points = rules.gift_points(len(episodes))
+    state.lines = store.all_lines(user_id, row["id"])
     state.status = rules.season_status(state.started, len(done & set(range(1, len(episodes) + 1))),
                                        len(episodes), state.current_ep, state.last_completed_at, now)
     return state
@@ -106,15 +121,24 @@ def complete(user_id: str, state: SeasonState, ep: Episode, now: datetime) -> bo
     """'다 봤어요'. 새로 끝낸 회차면 True (연타·다시 보기는 False)."""
     ts = now.isoformat()
     new = store.add_completion(user_id, state.row["id"], ep.index, ep.start, ep.end, ep.minutes, ts)
-    if not new:
+    if not new and ep.index != state.current_ep:
         return False
+    # 이미 끝낸 회차라도 지금 볼 차례면('1화부터 다시 보기' 뒤) 기록은 그대로 두고 진행 위치만 다음 화로
     current = max(state.current_ep, ep.index + 1)
     store.save_progress(user_id, state.row["id"], current_ep=current, last_completed_ep=ep.index,
                         last_end_pos=store.pos_key(ep.end), last_completed_at=ts)
+    if not new:
+        return False
     store.log_event(ts, user_id, "ep_complete", state.row["id"], ep.index, {"est_min": ep.minutes})
     if len(state.done | {ep.index}) >= state.total:
         store.log_event(ts, user_id, "season_complete", state.row["id"], ep.index)
     return True
+
+
+def restart(user_id: str, state: SeasonState) -> None:
+    """S3 '1화부터 다시 보기': 진행 위치만 1화로. 완료·한 줄·예측·선물 기록은 지우지 않는다 (FR-008)."""
+    store.save_progress(user_id, state.row["id"], current_ep=1,
+                        restart_count=(state.progress or {}).get("restart_count", 0) + 1)
 
 
 def most_recent(user_id: str, states: list[SeasonState]) -> SeasonState | None:

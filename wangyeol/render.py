@@ -12,6 +12,11 @@ _LIST_TYPES = {"bulleted_list_item", "numbered_list_item"}
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>#~|])")
 
 
+def reset_images() -> None:
+    """회차를 그리기 전에 부른다: 이미지 번호(alt "본문 이미지 N")를 1부터 다시. 사용자마다 따로 세려고 세션에 둔다."""
+    st.session_state["wg_images"] = 0
+
+
 def _escape(text: str) -> str:
     return _MD_SPECIAL.sub(r"\\\1", text)
 
@@ -138,7 +143,9 @@ def render_block(b: dict) -> None:
     elif t == "image":
         url = media_url(b)
         if url:
-            st.image(url, caption=plain(data.get("caption")) or None, width="stretch")
+            n = st.session_state["wg_images"] = st.session_state.get("wg_images", 0) + 1
+            caption = plain(data.get("caption"))  # 화면 낭독용 alt: 노션 캡션 → 없으면 "본문 이미지 N" (v03)
+            st.image(url, caption=caption or None, width="stretch", alt=caption or f"본문 이미지 {n}")
     elif t in ("video", "embed"):
         yt = b.get("_yt")
         url = media_url(b)

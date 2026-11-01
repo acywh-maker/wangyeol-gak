@@ -1,6 +1,7 @@
 """완결각 — Streamlit 진입점.
 
-흐름: S1 입장 → S2 서재 → (S6 목표·선물·가용시간) → S2-b 시즌 홈 → S4 회차 → S5 완료 → (S5-b/S5-c 선물)
+흐름: S1 입장 → S2 서재 → (S6 목표·선물·가용시간 / 3일 이상 쉬었으면 S3 복귀 선택) → S2-b 시즌 홈 → S4 회차
+→ S5 완료 → (S5-b/S5-c 선물) → (10화 이상 시즌 완결이면 S7 완결 리포트)
 카카오페이지 레퍼런스에서 가져온 것: 시즌 홈의 회차 목록, 하단 고정 '이어보기 · n화', 뷰어식 회차 첫머리.
 """
 from datetime import timedelta
@@ -10,7 +11,7 @@ import streamlit as st
 
 import ds
 from wangyeol import auth, notion, rules, service, store, text
-from wangyeol.render import md, render_segment, show
+from wangyeol.render import md, render_segment, reset_images, show
 
 st.set_page_config(page_title="완결각", page_icon="📖", layout="centered")
 ds.apply()
@@ -64,7 +65,7 @@ def theme() -> str:
 def theme_toggle() -> None:
     """라이트/다크 전환. 사용자별로 저장된다."""
     dark = theme() == "dark"
-    if st.button("☀️ 라이트 모드" if dark else "🌙 다크 모드", type="tertiary", key="theme-toggle"):
+    if st.button("라이트로 보기" if dark else "다크로 보기", type="tertiary", key="theme-toggle"):
         new = "light" if dark else "dark"
         store.set_theme(ss.user["user_id"], new)
         ss.user = {**ss.user, "theme": new}
@@ -97,11 +98,19 @@ def state_for(season_id: str) -> service.SeasonState | None:
     return service.load_state(ss.user["user_id"], row, now()) if row else None
 
 
+def comeback_due(state: service.SeasonState) -> int:
+    """3일 이상 쉬었으면 그 날 수. 같은 접속에서 시즌마다 한 번만 묻는다."""
+    days = state.away_days(now())
+    return 0 if state.row["id"] in ss.get("comeback_seen", set()) else days
+
+
 def enter_season(state: service.SeasonState) -> None:
-    """시즌 진입 판단: 처음이면 S6, 아니면 시즌 홈. (3일 이상 쉬었을 때 S3는 Day 3)"""
+    """시즌 진입 판단: 처음이면 S6, 3일 이상 쉬었으면 S3, 아니면 시즌 홈."""
     if not state.started:
         log("gift_setup_view", state.row["id"])
         go("goal", season_id=state.row["id"], goal_edit=False)
+    if days := comeback_due(state):
+        go("comeback", season_id=state.row["id"], away_days=days)
     log("season_view", state.row["id"])
     go("home", season_id=state.row["id"])
 
@@ -156,9 +165,10 @@ def library() -> None:
         progress = f"{len(s.done)}/{s.total}화" if s.started else f"{s.total}화"
         with st.container(key=f"wg-card-{s.row['id']}"):
             done_cls = " wg-card--done" if kind == "done" else ""
-            st.html(f'<div class="wg-card-title{done_cls}">{escape(s.row["title"])}</div>'
-                    f'<div class="wg-card-meta">{badge(kind, label)}<span>{progress}</span></div>')
-            if st.button(s.row["title"], key=f"open-{s.row['id']}", width="stretch"):
+            # 화면 낭독기는 덮개 버튼 이름(시즌명, 상태, 진행)만 읽는다 — 보이는 글자는 낭독에서 숨김
+            st.html(f'<div aria-hidden="true"><div class="wg-card-title{done_cls}">{escape(s.row["title"])}</div>'
+                    f'<div class="wg-card-meta">{badge(kind, label)}<span>{progress}</span></div></div>')
+            if st.button(f"{s.row['title']}, {label}, {progress}", key=f"open-{s.row['id']}", width="stretch"):
                 enter_season(s)
 
     if st.button("로그아웃", type="tertiary"):
@@ -169,10 +179,68 @@ def library() -> None:
 
     recent = service.most_recent(ss.user["user_id"], states)
     if recent and recent.next_ep:
+        t, n = now(), recent.current_ep
+        locked = not recent.is_arrived(t)  # 다음 화가 아직 도착 전이면 바로 열지 않고 확인 창부터 (v03)
         with st.container(key="ds-cta"):
             title = recent.row["title"] if len(recent.row["title"]) <= 14 else recent.row["title"][:13] + "…"
-            if st.button(f"이어보기 · {title} {recent.current_ep}화", type="primary", width="stretch"):
-                open_episode(recent, recent.current_ep)
+            label = f"{n}화 미리 열기 · {title}" if locked else f"이어보기 · {title} {n}화"
+            if st.button(label, type="primary", width="stretch"):
+                if days := comeback_due(recent):
+                    go("comeback", season_id=recent.row["id"], away_days=days)
+                if not locked:
+                    open_episode(recent, n)
+                preview_dialog(recent, t)
+
+
+def preview_dialog(state: service.SeasonState, t) -> None:
+    """서재 '미리 열기' 확인 창: 미리 보면 하루 한 화 기록이 어떻게 되는지 알려 준다."""
+    n, arr, nxt = state.current_ep, state.arrival(), rules.arrival_after(t)  # nxt: 지금 끝내면 그다음 화가 오는 때 (BR-002)
+
+    @st.dialog(f"{n}화를 미리 열까요?")
+    def body():
+        after = f" {n + 1}화는 {rules.day_text(t, nxt)} {rules.clock_text(nxt)}에 도착해요." if n < state.total else ""
+        st.html(f'<div class="wg-dialog-text">{n}화는 {rules.day_text(t, arr)} {rules.clock_text(arr)}에 도착할 예정이에요. '
+                f'미리 열어 다 보면 오늘 본 것으로 기록되고,{after}</div>')
+        with st.container(horizontal=True, key="ds-row-preview"):
+            if st.button("취소", width="stretch", key="preview-cancel"):
+                st.rerun()
+            if st.button(f"{n}화 미리 열기", type="primary", width="stretch", key="preview-open"):
+                open_episode(state, n)
+
+    body()
+
+
+def steps(label: str, filled: int, cells: int) -> None:
+    """한 화에 한 칸: [■■■□□□□□] (label은 HTML로 들어가므로 사용자 글자는 escape해서 넘긴다)"""
+    row = "".join(f'<span class="wg-steps__cell{" is-done" if i < filled else ""}"></span>' for i in range(cells))
+    st.html(f'<div class="wg-label">{label}</div><div class="wg-steps">{row}</div>')
+
+
+# ---------- S3 복귀 선택 ----------
+
+def comeback() -> None:
+    try:
+        s = state_for(ss.get("season_id", ""))
+    except notion.NotionError as e:
+        load_error(e)
+        return
+    if not s:
+        go("library")
+    uid, sid = ss.user["user_id"], s.row["id"]
+    ss.setdefault("comeback_seen", set()).add(sid)
+    top_bar("서재", "library")
+    st.html(f'<div class="wg-title">{escape(ss.user["nickname"])}님 {ss.get("away_days", service.COMEBACK_DAYS)}일 만이네요.</div>'
+            '<div class="wg-stat">쉬어 간 날도 이야기의 일부예요. 이어 볼까요?</div>')
+    steps(f'{escape(s.row["title"])} · {len(s.done)}/{s.total}화', len(s.done), s.total)
+    # 두 버튼 같은 크기·같은 스타일 (PRD 7장 8번). S3-b 지난 이야기는 만들지 않음 (v03 사용자 확정)
+    with st.container(key="wg-comeback"):
+        if st.button(f"이어서 {s.current_ep}화 보기", width="stretch", key="comeback-resume"):
+            log("return_choice_resume", sid, s.current_ep)
+            open_episode(s, s.current_ep)
+        if st.button("1화부터 다시 보기", width="stretch", key="comeback-restart"):
+            service.restart(uid, s)
+            log("return_choice_restart", sid)
+            open_episode(s, 1)
 
 
 # ---------- S2-b 시즌 홈 ----------
@@ -197,22 +265,24 @@ def home() -> None:
     gifts = {p: ("완결 선물" if p == s.points[-1] else "중간 선물") for p in s.points}
     for ep in s.episodes:
         done = ep.index in s.done
-        tags = []
+        tags, said = [], []  # said: 덮개 버튼 이름에 넣을 상태 문구 (화면 낭독용)
         if done:
             tags.append(badge("done-ep", "읽었어요", "check"))
+            said.append("읽었어요")
         elif ep.index == s.current_ep and not s.finished:
-            if s.is_arrived(t):
-                tags.append(badge("arrived", "오늘의 화 도착"))
-            else:
-                tags.append(badge("waiting", rules.arrival_text(t, s.arrival())))
+            arrived = s.is_arrived(t)
+            status = "오늘의 화 도착" if arrived else rules.arrival_text(t, s.arrival())
+            tags.append(badge("arrived" if arrived else "waiting", status))
+            said.append(status)
         if ep.index in gifts:
             tags.append(badge("gift", gifts[ep.index], "gift"))
+            said.append(gifts[ep.index])
         cls = "wg-ep wg-ep--done" if done else ("wg-ep wg-ep--current" if ep.index == s.current_ep else "wg-ep")
         with st.container(key=f"wg-row-{ep.index}"):
-            st.html(f'<div class="{cls}"><div class="wg-ep__no">{ep.index}화 · 약 {ep.minutes}분</div>'
+            st.html(f'<div class="{cls}" aria-hidden="true"><div class="wg-ep__no">{ep.index}화 · 약 {ep.minutes}분</div>'
                     f'<div class="wg-ep__title">{escape(ep.title)}</div>'
                     f'<div class="wg-ep__tags">{"".join(tags)}</div></div>')
-            if st.button(f"{ep.index}화 {ep.title}", key=f"ep-{ep.index}", width="stretch"):
+            if st.button(", ".join([f"{ep.index}화 {ep.title}", f"약 {ep.minutes}분", *said]), key=f"ep-{ep.index}", width="stretch"):
                 open_episode(s, ep.index)
 
     if not s.finished and s.next_ep:
@@ -270,22 +340,20 @@ def goal() -> None:
 
     last = points[-1]
     st.html('<div class="wg-label">완주한 날의 나를 위한 선물</div>')
-    # 아이콘은 components.css에서 버튼 key로 붙인다. 고른 쪽은 메인색(primary).
+    # 아이콘은 components.css에서 버튼 key로 붙인다. 고른 쪽은 선택 상태(주황 테두리, v03) — 키 끝 '-on'.
     # 편지와 기프티콘은 따로 고른다: 하나만, 또는 둘 다(기프티콘에 편지 동봉)
     with st.container(horizontal=True, key="ds-row-final"):
-        if st.button("나에게 편지 쓰기", key="final-letter_final", width="stretch",
-                     type="primary" if draft["final_letter"] else "secondary"):
+        if st.button("나에게 편지 쓰기", key="final-letter_final" + ("-on" if draft["final_letter"] else ""), width="stretch"):
             draft["final_letter"] = not draft["final_letter"]
             st.rerun()
-        if st.button("기프티콘 고르기", key="final-gifticon", width="stretch",
-                     type="primary" if draft["gift_item"] else "secondary"):
+        if st.button("기프티콘 고르기", key="final-gifticon" + ("-on" if draft["gift_item"] else ""), width="stretch"):
             go("gift")
     if draft["gift_item"]:
         st.caption(f"고른 선물: {draft['gift_item']} · 결제 기능은 아직 준비 중이에요")
     if draft["final_letter"]:
-        draft["letters"][last] = st.text_area("완결한 나에게 편지 쓰기", value=draft["letters"].get(last, ""),
+        draft["letters"][last] = st.text_area("모두 해낸 미래의 나에게 편지 쓰기", value=draft["letters"].get(last, ""),
                                               max_chars=500, key=f"letter-{last}", label_visibility="collapsed",
-                                              placeholder="완결한 나에게 편지 쓰기…")
+                                              placeholder="모두 해낸 미래의 나에게 편지 쓰기…")
         st.caption(SAVE_HINT)
 
     # 처음: 저장 없이 시작(10분) / 수정 중: 바꾸지 않고 시즌 홈으로
@@ -326,10 +394,10 @@ def gift() -> None:
     for row in (items[:2], items[2:]):
         with st.container(horizontal=True, key=f"ds-row-gift-{row[0]}"):
             for item in row:
-                picked = draft.get("gift_item") == item  # 고른 상품: 이미지 테두리 + 버튼 메인색
+                picked = draft.get("gift_item") == item  # 고른 상품: 이미지 테두리 + 버튼 선택 상태(CSS, v03)
                 with st.container(key=f"wg-gift-{item}"):
                     st.html(f'<div class="wg-gift__img{" wg-gift__img--picked" if picked else ""}"></div>')
-                    if st.button(item, key=f"pick-{item}", type="primary" if picked else "secondary", width="stretch"):
+                    if st.button(item, key=f"pick-{item}", width="stretch"):
                         if picked:  # 다시 누르면 기프티콘 선택 해제
                             draft["gift_item"] = ""
                             ss.pop("gift_picked", None)
@@ -403,6 +471,7 @@ def episode() -> None:
             show(md(units[ep.summary_unit].blocks[0]["callout"]["rich_text"]))
 
     # 5. 본문
+    reset_images()
     for seg in ep.segments:
         if seg.unit != ep.summary_unit:
             render_segment(units, seg)
@@ -463,12 +532,9 @@ def done() -> None:
         ss.balloons_shown = True
     last = idx >= s.total  # 마지막 화: 같은 S5를 완결용 문구로 (v02 B안, S7 대신)
     n = store.total_completed(ss.user["user_id"])
-    st.html(f'<div class="wg-done"><div class="wg-done__title">{"시즌 완결! 오늘도 해냈어요" if last else "오늘의 에피소드를 다 봤어요!"}</div>'
+    top_bar()
+    st.html(f'<div class="wg-done">{ds.icon("check")}<div class="wg-done__title">{"시즌 완결! 오늘도 해냈어요" if last else "오늘의 에피소드를 다 봤어요!"}</div>'
             f'<div class="wg-meta">{"첫 화 완료! 멋진 시작이에요" if n == 1 else f"지금까지 {n}화를 쌓았어요"}</div></div>')
-
-    def steps(label: str, filled: int, cells: int) -> None:  # 한 화에 한 칸: [■■■□□□□□]
-        row = "".join(f'<span class="wg-steps__cell{" is-done" if i < filled else ""}"></span>' for i in range(cells))
-        st.html(f'<div class="wg-label">{label}</div><div class="wg-steps">{row}</div>')
 
     nxt = rules.next_gift(s.points, idx)
     if last:
@@ -478,7 +544,7 @@ def done() -> None:
         steps(f"{left}화를 더 보면 선물이 기다려요", idx, point)
 
     gift = store.get_gifts(ss.user["user_id"], s.row["id"]).get(idx) if idx in s.points else None
-    if gift:
+    if gift and not gift.get("delivered_at"):  # 이미 받은 선물은 다시 보여 주지 않음 ('1화부터 다시 보기' 뒤)
         if st.button("선물 확인하기", type="primary", width="stretch", key="gift-open"):
             go("gift_arrived")
         return
@@ -487,11 +553,15 @@ def done() -> None:
         arr = s.arrival()
         text = rules.arrival_sentence(now(), arr, idx + 1) if arr else f"{idx + 1}화를 지금 볼 수 있어요"
         st.html(f'<div class="wg-box-plain"><div class="wg-label">다음 화</div><div>{text}</div></div>')
-    with st.container(horizontal=True, key="ds-row-done"):
-        if st.button("서재로", width="stretch"):
-            go("library")
-        if idx < s.total and st.button("미리 열기", width="stretch"):
-            open_episode(s, idx + 1)
+    # 서재로 = 주 버튼(꽉 찬 주황은 이것 하나), 미리 열기 = 글자 버튼 (v03)
+    # 10화 이상 시즌을 완결했으면 서재로 대신 S7 완결 리포트 (선물이 없을 때)
+    if last and s.has_report:
+        if st.button("완결 리포트 보기", type="primary", width="stretch", key="done-report"):
+            go("report")
+    elif st.button("서재로", type="primary", width="stretch", key="done-library"):
+        go("library")
+    if idx < s.total and st.button("미리 열기", type="tertiary", key="done-preview"):
+        open_episode(s, idx + 1)
 
 
 def gift_arrived() -> None:
@@ -512,8 +582,33 @@ def gift_arrived() -> None:
         box = (f'<div class="wg-gift-box"><div class="wg-gift__img"></div><div>{escape(g.get("gift_item", ""))}</div>'
                f'<div class="wg-stamp">선물 도착</div></div>') if g["kind"] == "gifticon" else ""
         body = box + letter  # 기프티콘에 편지를 동봉했으면 둘 다
-        st.html(f'<div class="wg-title">스스로 정한 목표를 끝까지 지킨 {nick}님.<br>정말 대단해요, 약속한 선물이에요.<br>축하드려요!</div>{body}')
-    if st.button("서재로", type="primary", width="stretch", key="to-library"):  # S7 완결 리포트는 Day 3
+        st.html(f'<div class="wg-title wg-title--sm">스스로 정한 목표를 끝까지 지킨 {nick}님.<br>정말 대단해요, 약속한 선물이에요.<br>축하드려요!</div>{body}')
+    if idx >= s.total and s.has_report:  # S5-c → S7 (10화 이상 시즌만)
+        if st.button("완결 리포트 보기", type="primary", width="stretch", key="to-report"):
+            go("report")
+    elif st.button("서재로", type="primary", width="stretch", key="to-library"):
+        go("library")
+
+
+# ---------- S7 완결 리포트 ----------
+
+def report() -> None:
+    try:
+        s = state_for(ss.get("season_id", ""))
+    except notion.NotionError as e:
+        load_error(e)
+        return
+    if not s or not s.has_report:
+        go("library")
+    top_bar()
+    st.html(f'<div class="wg-done">{badge("done", "완결")}<div class="wg-done__title">완주를 축하해요!</div>'
+            f'<div class="wg-stat">한 화씩 쌓아서 여기까지 왔어요</div>'
+            f'<div class="wg-meta">{escape(s.row["title"])} · {s.total}화</div></div>')
+    st.html('<div class="wg-label">해낸 날의 한 줄</div>')
+    # 한 줄이 하나 이상 있을 때만 이 화면에 온다(has_report). 카드 간격을 좁게: 한 번에 그림
+    st.html("".join(f'<div class="wg-box-plain"><div class="wg-label">{i}화 · {escape(s.episodes[i - 1].title)}</div>'
+                    f'<div>{escape(s.lines[i])}</div></div>' for i in sorted(k for k in s.lines if k <= s.total)))
+    if st.button("다른 시즌 보기", width="stretch", key="report-library"):
         go("library")
 
 
@@ -546,4 +641,4 @@ if "user" not in ss:
     entry()
 else:
     {"library": library, "home": home, "goal": goal, "gift": gift, "episode": episode,
-     "done": done, "gift_arrived": gift_arrived}.get(ss.screen, library)()
+     "done": done, "gift_arrived": gift_arrived, "comeback": comeback, "report": report}.get(ss.screen, library)()

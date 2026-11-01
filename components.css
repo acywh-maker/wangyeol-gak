@@ -17,22 +17,27 @@
 img, iframe, video { max-width: 100%; }
 
 .wg-title { font-size: var(--fs-title-lg); line-height: var(--lh-title-lg); font-weight: 700; color: var(--text-strong); margin: var(--space-2) 0 var(--space-4); }
+.wg-title--sm { font-size: var(--fs-title-sm); line-height: var(--lh-title-sm); }  /* S5-c: 선물보다 한 단계 작게 (v03 2차) */
 .wg-stat { font-size: var(--fs-meta-lg); line-height: var(--lh-meta-lg); color: var(--text-tertiary); }
 .wg-meta { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); }
 .wg-label { font-size: var(--fs-caption); font-weight: 600; color: var(--text-tertiary); margin-bottom: var(--space-2); }
 
-[class*="st-key-wg-card"] {
-  background: var(--bg-surface); border-radius: var(--radius-xl); box-shadow: var(--shadow-card);
-  padding: var(--space-7);
+/* 카드 공통 (서재 시즌 카드, 회차 카드, 목표·다음 화·안내 상자): 표면 + 테두리 1px + 그림자 + radius 16 (v03 접근성 스펙) */
+[class*="st-key-wg-card"], [class*="st-key-wg-summary"], [class*="st-key-wg-box"],
+.wg-goal, .wg-box-plain, .wg-letter, .wg-notice, .wg-lecture, .wg-gift-box, .wg-ep--current {
+  background: var(--bg-surface); border: 1px solid var(--line-default); border-radius: var(--card-radius); box-shadow: var(--shadow-card);
 }
+[class*="st-key-wg-card"] { padding: var(--space-7); }
+/* 테두리는 '오늘의 화 도착' 카드·회차에만 (v03 2차 사용자 지정). 크기가 변하지 않게 색만 뺀다 */
+[class*="st-key-wg-card"]:not(:has(.wg-badge--arrived)), .wg-ep--current:not(:has(.wg-badge--arrived)),
+.wg-goal, .wg-letter { border-color: transparent; }
 .wg-card-title {
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   font-size: var(--fs-card-title); line-height: var(--lh-card-title); font-weight: 700; color: var(--text-on-surface);
 }
-[class*="st-key-wg-summary"] { background: var(--bg-notice); border-radius: var(--radius-md); padding: var(--space-6); }
-[class*="st-key-wg-box"] { background: var(--bg-box); border: 1px solid var(--line-strong); border-radius: var(--radius-md); padding: var(--space-6); }
+[class*="st-key-wg-summary"], [class*="st-key-wg-box"] { padding: var(--space-6); }
 
-.wg-lecture { background: var(--bg-surface); border: 1px solid var(--line-default); border-radius: var(--radius-md); padding: var(--space-5) var(--space-6); margin: var(--space-2) 0; }
+.wg-lecture { padding: var(--space-5) var(--space-6); margin: var(--space-2) 0; }
 .wg-lecture__title { font-size: var(--fs-body-lg); font-weight: 600; color: var(--text-on-surface); }
 .wg-lecture__span { font-size: var(--fs-body-md); color: var(--text-on-surface-muted); margin-top: var(--space-2); }
 
@@ -55,8 +60,8 @@ img, iframe, video { max-width: 100%; }
 [class*="st-key-wg-card"] [data-testid="stElementContainer"]:has(.stButton) { display: contents; }
 .wg-card-meta { display: flex; align-items: center; gap: var(--space-4); margin-top: var(--space-4);
   font-size: var(--fs-body-md); color: var(--text-on-surface-muted); }
-/* 완결 시즌 카드: 흐리게 (사용자 시안) */
-[class*="st-key-wg-card"]:has(.wg-card--done) { background: var(--status-done-card-bg); box-shadow: none; }
+/* 완결 시즌 카드: 다른 카드와 같은 표면, 글자만 보조색으로 흐리게 */
+[class*="st-key-wg-card"]:has(.wg-card--done) { background: var(--status-done-card-bg); }
 .wg-card--done, .wg-card--done ~ .wg-card-meta, [class*="st-key-wg-card"]:has(.wg-card--done) .wg-card-meta { color: var(--status-done-card-fg); }
 
 /* 배지: 정보형만. 빨간색·깜빡임 없음 (7장 1번) */
@@ -79,31 +84,34 @@ img, iframe, video { max-width: 100%; }
 .wg-ep__title { font-size: var(--fs-body-lg); font-weight: 600; color: var(--text-primary); margin: var(--space-1) 0; }
 .wg-ep__tags { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
 .wg-ep--done .wg-ep__title, .wg-ep--done .wg-ep__no { color: var(--status-read-fg); }
-.wg-ep--current { background: var(--status-current-bg); border-radius: var(--radius-md); padding-left: var(--space-5); padding-right: var(--space-5); }
+.wg-ep--current { padding-left: var(--space-5); padding-right: var(--space-5); }
 
 /* 뷰어식 첫머리 */
-.wg-viewer-head { text-align: center; padding: var(--space-9) 0 var(--space-8); border-bottom: 1px solid var(--line-default); margin-bottom: var(--space-8); }
+.wg-viewer-head { text-align: left; padding: var(--space-9) 0 var(--space-8); border-bottom: 1px solid var(--line-default); margin-bottom: var(--space-8); }
 .wg-viewer-head__no { font-size: var(--fs-body-md); color: var(--text-tertiary); }
 .wg-viewer-head__title { font-size: var(--fs-title-lg); line-height: var(--lh-title-lg); font-weight: 700; color: var(--text-strong); margin: var(--space-4) 0; word-break: keep-all; }
 .wg-viewer-head__min { font-size: var(--fs-caption); color: var(--text-tertiary); }
 
 /* S1 / S5 / S6 / 선물 */
 .wg-hero { padding: var(--space-11) 0 var(--space-9); }
-.wg-hero__title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 700; }
+.wg-hero__title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 700; color: var(--text-strong); }
 .wg-hero__sub { font-size: var(--fs-body-lg); color: var(--text-tertiary); margin-top: var(--space-4); }
 /* S1 입력 필드: 높이와 필드 사이 간격 (v02 사용자 지정) */
 .st-key-wg-fields { gap: var(--field-gap); }
 .st-key-wg-fields [data-testid="stTextInputRootElement"] { height: var(--input-height); }
-.wg-done { text-align: center; padding: var(--space-10) 0 var(--space-8); }
+/* 완료 화면: 제목을 왼쪽 정렬해 진행 칸·본문과 맞춘다 (v03 접근성 스펙) */
+.wg-done { text-align: left; padding: var(--space-6) 0 var(--space-8); }
+.wg-done .wg-icon--check { color: var(--action-primary); margin-bottom: var(--space-5); }
+.wg-done .wg-badge { margin-bottom: var(--space-5); }  /* S7: '완결' 배지 아래 제목 */
 /* S5 선물까지 진행: 한 화에 한 칸 */
 .wg-steps { display: flex; gap: var(--space-1); margin: var(--space-2) 0 var(--space-6); }
 .wg-steps__cell { flex: 1; height: var(--space-4); border-radius: var(--radius-xs); background: var(--line-strong); }
 .wg-steps__cell.is-done { background: var(--action-primary); }
 .st-key-wg-source .stMarkdown p { font-size: var(--fs-body-md); }
-.wg-done__title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 700; margin-bottom: var(--space-4); }
+.wg-done__title { font-size: var(--fs-title-xl); line-height: var(--lh-title-xl); font-weight: 700; color: var(--text-strong); margin-bottom: var(--space-4); }
 /* 한글은 낱말 단위로 줄바꿈 ('봤어/요', '남/음' 방지) */
 .wg-done__title, .wg-box-plain { word-break: keep-all; }
-.wg-goal, .wg-box-plain, .wg-letter, .wg-notice { background: var(--bg-notice); border-radius: var(--radius-md); padding: var(--space-6); margin: var(--space-4) 0; }
+.wg-goal, .wg-box-plain, .wg-letter, .wg-notice { padding: var(--space-6); margin: var(--space-4) 0; }
 .wg-goal__main { font-size: var(--fs-title-sm); font-weight: 700; margin-bottom: var(--space-2); }
 .wg-notice__title { font-size: var(--fs-title-sm); font-weight: 700; margin-bottom: var(--space-2); }
 .wg-gift__img { aspect-ratio: 1 / 1; background: var(--bg-placeholder); border-radius: var(--radius-sm); margin-bottom: var(--space-3);
@@ -114,20 +122,26 @@ img, iframe, video { max-width: 100%; }
 [class*="st-key-wg-gift-"] [data-testid="stElementContainer"]:has(.stButton),
 [class*="st-key-wg-gift-"] .stButton, [class*="st-key-wg-gift-"] .stButton * { position: static; }
 [class*="st-key-wg-gift-"] .stButton button::after { content: ""; position: absolute; inset: 0; z-index: 1; }
-.wg-gift-box { text-align: center; padding: var(--space-8); border: 1px solid var(--line-default); border-radius: var(--radius-xl); position: relative; }
+/* 선물 상자: v02 테두리로 되돌림 — 바탕 없이 테두리 1px + radius-xl (v03 2차 사용자 지정) */
+.wg-gift-box { text-align: center; padding: var(--space-8); position: relative;
+  background: none; border: 1px solid var(--line-default); border-radius: var(--radius-xl); box-shadow: none; }
 .wg-gift-box .wg-gift__img { width: 60%; margin: 0 auto var(--space-5); }
 .wg-stamp { display: inline-block; margin-top: var(--space-5); padding: var(--space-3) var(--space-6);
   border: 2px solid var(--status-gift-line); border-radius: var(--radius-pill); font-weight: 700; transform: rotate(-6deg); }
 
 /* S6 완결 선물 두 선택지: 글자가 길어도 잘리지 않게 줄바꿈, 두 버튼 같은 높이 (PRD 7장 8번) */
 .st-key-ds-row-final button { min-height: 56px; height: 100%; }
+.st-key-ds-row-final [class*="st-key-final-"]:not([class*="-on"]) button { border-color: transparent; }  /* 안 고른 쪽은 테두리 없음 (v03 2차) */
 .st-key-ds-row-final button p { white-space: normal; }
-/* 선물 버튼: 아이콘 + 미디엄 글자, 고른 쪽은 primary(메인색) (v02) */
+/* 선물 버튼: 아이콘 + 미디엄 글자 (v02). 고른 쪽은 선택 상태 (v03: 주황 테두리 2px + 옅은 주황 배경) */
+[class*="st-key-final-"][class*="-on"] button, [class*="st-key-wg-gift-"]:has(.wg-gift__img--picked) button {
+  background: var(--action-selected-bg); border-color: var(--action-primary); box-shadow: inset 0 0 0 calc(var(--selected-border) - 1px) var(--action-primary);
+  color: var(--text-primary); }
 .st-key-ds-row-final button p { display: inline-flex; align-items: center; gap: var(--space-3); font-weight: var(--fw-medium); }
 .st-key-ds-row-final button p::before { content: ""; width: var(--button-icon); height: var(--button-icon); flex: none; background-color: currentColor;
   -webkit-mask: var(--icon) no-repeat center / contain; mask: var(--icon) no-repeat center / contain; }
-.st-key-final-letter_final button p::before { --icon: var(--icon-letter); }
-.st-key-final-gifticon button p::before { --icon: var(--icon-gift-box); }
+[class*="st-key-final-letter_final"] button p::before { --icon: var(--icon-letter); }
+[class*="st-key-final-gifticon"] button p::before { --icon: var(--icon-gift-box); }
 
 /* 라이트/다크 모드 버튼은 14 유지, 입력칸 글자는 기본 UI 글자(16)와 같게 (v02) */
 .st-key-theme-toggle button p { font-size: var(--fs-ui-sm); }
@@ -142,5 +156,17 @@ img, iframe, video { max-width: 100%; }
 .st-key-later button p, .st-key-goal-edit button p { white-space: nowrap; }
 
 /* 주요 버튼(하단 바 + 본문 끝 주황 버튼): 17 미디엄 (v02) */
-.st-key-ds-cta button p, .st-key-done button p, .st-key-gift-open button p, .st-key-to-library button p {
+.st-key-ds-cta button p, .st-key-done button p, .st-key-gift-open button p, .st-key-to-library button p, .st-key-done-library button p,
+.st-key-done-report button p, .st-key-to-report button p {
   font-size: var(--fs-cta); font-weight: var(--fw-medium); }
+
+/* S3 복귀 선택: 두 버튼 같은 크기·같은 스타일, 위아래로 (와이어플로우 v0.2) */
+.st-key-wg-comeback { margin-top: var(--space-6); }
+.st-key-wg-comeback button { min-height: 56px; }
+
+/* 확인 창(st.dialog, 서재 미리 열기): 페이지와 같은 바탕·글자, 카드와 같은 테두리 (v03) */
+[data-testid="stDialog"] [role="dialog"] { background: var(--bg-default); color: var(--text-primary);
+  border: 1px solid var(--line-default); border-radius: var(--card-radius); }
+[data-testid="stDialog"] [role="dialog"] h2, [data-testid="stDialog"] [role="dialog"] h2 * { color: var(--text-strong); font-size: var(--fs-title-sm); }
+[data-testid="stDialog"] [role="dialog"] button[aria-label="Close"] { color: var(--text-secondary); }
+.wg-dialog-text { font-size: var(--fs-body-md); line-height: var(--lh-body-md); color: var(--text-primary); word-break: keep-all; margin-bottom: var(--space-6); }

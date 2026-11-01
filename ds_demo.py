@@ -28,7 +28,7 @@ st.html('<div class="wg-title">완결각 디자인 시스템</div>'
         '<div class="wg-meta">tokens.json → scripts/build_tokens.py → tokens.css · components.css · config.toml</div>')
 
 st.subheader("브랜드 · 의미 색")
-swatches("brand (교체 예정)", ["brand-400", "brand-500", "brand-600"])
+swatches("brand (교체 예정)", ["brand-400", "brand-600"])
 swatches("action", ["action-primary", "action-primary-press", "action-secondary", "action-highlight"])
 swatches("bg · text", ["bg-default", "bg-surface", "bg-notice", "text-strong", "text-primary", "text-tertiary", "text-on-surface"])
 swatches("status (배지·회차 상태)", ["status-arrived-bg", "status-waiting-bg", "status-done-bg",

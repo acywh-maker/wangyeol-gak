@@ -37,7 +37,6 @@
   --alpha-dim-30: rgba(0,0,0,0.30);
   /* color.brand */
   --brand-400: #FF884D;
-  --brand-500: #F2763A;
   --brand-600: #D9601F;
   /* semantic.bg */
   --bg-default: #EFEEEC;
@@ -48,23 +47,23 @@
   --bg-placeholder: var(--gray-200);
   --bg-box: var(--bg-surface);
   /* semantic.text */
-  --text-strong: var(--gray-1000);
-  --text-primary: var(--gray-850);
-  --text-secondary: var(--gray-800);
-  --text-tertiary: #666666;
+  --text-strong: #1F1D1A;
+  --text-primary: #1F1D1A;
+  --text-secondary: #5E5B57;
+  --text-tertiary: #5E5B57;
   --text-disabled: var(--gray-600);
-  --text-on-primary: var(--gray-900);
+  --text-on-primary: #1F1D1A;
   --text-on-secondary: var(--gray-0);
-  --text-on-surface: var(--gray-850);
-  --text-on-surface-muted: var(--gray-800);
+  --text-on-surface: var(--text-primary);
+  --text-on-surface-muted: var(--text-secondary);
   --text-deco: #999999;
   /* semantic.line */
-  --line-strong: var(--gray-300);
-  --line-default: var(--gray-250);
+  --line-strong: #888888;
+  --line-default: #888888;
   --line-subtle: var(--gray-100);
   /* semantic.action */
   --action-primary: var(--brand-400);
-  --action-primary-press: var(--brand-500);
+  --action-primary-press: var(--action-primary);
   --action-secondary: var(--gray-850);
   --action-secondary-press: var(--gray-900);
   --action-tertiary: var(--gray-0);
@@ -74,6 +73,7 @@
   --action-cancel: var(--gray-400);
   --action-cancel-press: var(--gray-500);
   --action-highlight: var(--brand-600);
+  --action-selected-bg: rgba(255,136,77,0.12);
   /* semantic.status */
   --status-arrived-bg: #FFDABF;
   --status-arrived-fg: var(--text-on-primary);
@@ -83,10 +83,10 @@
   --status-done-fg: var(--text-on-secondary);
   --status-new-line: var(--line-strong);
   --status-gift-line: var(--action-highlight);
-  --status-read-fg: #666666;
+  --status-read-fg: var(--text-secondary);
   --status-current-bg: var(--bg-notice);
-  --status-done-card-bg: #D9D9D9;
-  --status-done-card-fg: var(--gray-850);
+  --status-done-card-bg: var(--bg-surface);
+  --status-done-card-fg: var(--text-secondary);
   /* font */
   --font-base: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --fw-regular: 400;
@@ -118,7 +118,7 @@
   /* shadow */
   --shadow-sm: 0 1px 5px 0 rgba(0,0,0,0.12);
   --shadow-md: 2px 2px 20px 0 rgba(0,0,0,0.06), 2px 2px 10px 0 rgba(0,0,0,0.04);
-  --shadow-card: 0 4px 24px 0 rgba(0,0,0,0.08);
+  --shadow-card: 0 1px 3px 0 rgba(0,0,0,0.08);
   --shadow-cover: 0 10px 24px 0 rgba(0,0,0,0.25);
   /* motion */
   --dur-fast: 150ms;
@@ -140,6 +140,8 @@
   --title-icon-height: 24px;
   --tap-min: 44px;
   --button-icon: 20px;
+  --selected-border: 2px;
+  --card-radius: 16px;
   /* typography */
   --fs-display: 44px; --lh-display: 1.23;
   --fs-title-lg: 24px; --lh-title-lg: 1.3;
@@ -156,31 +158,37 @@
   --fs-card-title: 18px; --lh-card-title: 1.3;
   --fs-cta: 17px; --lh-cta: 1.5;
   --fs-ui-sm: 14px; --lh-ui-sm: 1.5;
+  --fs-title-xl: 28px; --lh-title-xl: 1.3;
 }
 body:has(.wg-theme-dark) {
   --bg-default: #222222;
-  --bg-surface: #F0EFF0;
+  --bg-surface: #2B2B2B;
   --bg-box: transparent;
   --bg-muted: #333333;
-  --bg-notice: #2B2B2B;
+  --bg-notice: var(--bg-surface);
   --bg-placeholder: #3A3A3A;
   --bg-subtle: #262626;
-  --text-strong: #DFDFDF;
-  --text-primary: #BDBDBD;
-  --text-secondary: #B0B0B0;
-  --text-tertiary: #949494;
+  --text-strong: #EDEDED;
+  --text-primary: #EDEDED;
+  --text-secondary: #A8A8A8;
+  --text-tertiary: #A8A8A8;
   --text-disabled: #707070;
-  --line-strong: #9A9A9A;
-  --line-default: #434343;
+  --text-on-surface: #EDEDED;
+  --text-on-surface-muted: #A8A8A8;
+  --line-strong: #757575;
+  --line-default: #757575;
   --line-subtle: #333333;
-  --action-tertiary-press: #E8E8E8;
+  --action-tertiary-press: #333333;
+  --action-tertiary: #2B2B2B;
   --status-arrived-bg: #FFBE82;
-  --status-waiting-bg: #FDFDFD;
+  --status-waiting-bg: #2B2B2B;
   --status-done-fg: #A8A8A8;
-  --status-read-fg: #666666;
+  --status-read-fg: #A8A8A8;
   --status-current-bg: #2B2B2B;
-  --status-done-card-bg: #828282;
-  --status-done-card-fg: #111111;
+  --status-done-card-bg: #2B2B2B;
+  --status-done-card-fg: #A8A8A8;
+  --status-arrived-fg: #242424;
+  --status-waiting-fg: #A8A8A8;
   color-scheme: dark;
 }
 @media (max-width: 599px) {
@@ -211,8 +219,9 @@ html, body, .stApp, .stApp * { font-family: var(--font-base); }
   background: var(--action-primary); color: var(--text-on-primary);
   border: 0; font-weight: var(--fw-semibold);
 }
-[data-testid="stBaseButton-primary"]:hover, [data-testid="stBaseButton-primary"]:active,
-[data-testid="stBaseButton-primaryFormSubmit"]:hover, [data-testid="stBaseButton-primaryFormSubmit"]:active {
+/* 누름·포커스 때도 같은 주황 하나 (v03: #F2763A 삭제, Streamlit 기본 포커스색이 더 진한 주황으로 바꾸던 것 막음) */
+[data-testid="stBaseButton-primary"]:hover, [data-testid="stBaseButton-primary"]:active, [data-testid="stBaseButton-primary"]:focus,
+[data-testid="stBaseButton-primaryFormSubmit"]:hover, [data-testid="stBaseButton-primaryFormSubmit"]:active, [data-testid="stBaseButton-primaryFormSubmit"]:focus {
   background: var(--action-primary-press); color: var(--text-on-primary); border: 0;
 }
 [data-testid="stBaseButton-secondary"] {
@@ -226,10 +235,24 @@ html, body, .stApp, .stApp * { font-family: var(--font-base); }
 [data-testid="stBaseButton-tertiary"]:hover { color: var(--text-strong); }
 .stApp button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-/* 입력창·텍스트 영역·칩: 페이지 배경과 구분되는 표면 색 + 표면 위 글자 */
-.stApp [data-baseweb="input"], .stApp [data-baseweb="base-input"], .stApp [data-baseweb="textarea"],
-.stApp [data-baseweb="input"] input, .stApp [data-baseweb="textarea"] textarea { background: var(--bg-surface); color: var(--text-on-surface); }
-button[data-variant="pills"] { background: var(--bg-surface); color: var(--text-on-surface-muted); }
+/* 입력창·텍스트 영역·칩: 표면 색 + 표면 위 글자 (v03 접근성 스펙: 다크에서 흰 입력창 1.88:1 버그 수정) */
+/* Streamlit 1.66: 입력창 바깥 틀이 stTextInputRootElement / stTextAreaRootElement 이고 테마의 흰 배경을 칠한다 */
+.stApp [data-testid="stTextInputRootElement"], .stApp [data-testid="stTextAreaRootElement"],
+.stApp [data-baseweb="input"], .stApp [data-baseweb="base-input"], .stApp [data-baseweb="textarea"] { background: var(--bg-surface); }
+.stApp [data-testid="stTextInputRootElement"] *, .stApp [data-testid="stTextAreaRootElement"] * { background-color: transparent; }
+.stApp input, .stApp textarea { color: var(--text-on-surface); -webkit-text-fill-color: var(--text-on-surface); caret-color: var(--text-on-surface); }
+.stApp input::placeholder, .stApp textarea::placeholder { color: var(--text-secondary); -webkit-text-fill-color: var(--text-secondary); opacity: 1; }
+/* 테두리 1px, 포커스 2px 주황 (안쪽 1px 그림자를 더해 2px로 — 크기가 바뀌지 않게) */
+.stApp [data-testid="stTextInputRootElement"], .stApp [data-testid="stTextAreaRootElement"] { border: 1px solid var(--line-default) !important; }
+.stApp [data-testid="stTextInputRootElement"]:focus-within, .stApp [data-testid="stTextAreaRootElement"]:focus-within {
+  border-color: var(--action-primary) !important; box-shadow: inset 0 0 0 1px var(--action-primary); }
+/* 입력창 안 버튼(PIN 보기 눈 아이콘): Streamlit 테마 글자색(라이트) 대신 토큰 → 다크에서도 보이게 */
+.stApp [data-testid="stTextInputRootElement"] button, .stApp [data-testid="stTextInputRootElement"] button * { color: var(--text-secondary); }
+/* 영어 "Press Enter to submit form" 안내 숨김 */
+.stApp [data-testid="InputInstructions"] { display: none; }
+button[data-variant="pills"] { background: var(--bg-surface); color: var(--text-on-surface-muted); border: 1px solid var(--line-default); min-height: var(--tap-min); }
+/* 본문 속 노션 날짜·인라인 코드: 다크에선 표면 + 보조 글자, 테두리 없음 */
+body:has(.wg-theme-dark) .stMarkdown code { background: var(--bg-surface); color: var(--text-secondary); border: 0; }
 
 /* 페이지 위 글자 (다크 테마에서 Streamlit 기본 글자색 대신 토큰을 따르게) */
 .stApp [data-testid="stWidgetLabel"], .stApp [data-testid="stWidgetLabel"] p { color: var(--text-primary); }
@@ -239,12 +262,15 @@ button[data-variant="pills"] { background: var(--bg-surface); color: var(--text-
 .stApp [data-testid="stExpander"] details { border-color: var(--line-default); background: transparent; }
 .stApp [data-testid="stExpander"] summary, .stApp [data-testid="stExpander"] summary p { color: var(--text-primary); }
 
-/* pills: 선택된 칩의 primary 글자가 primary 배경에 묻히지 않게 */
+/* 선택 상태(칩·선물 옵션): 꽉 찬 주황 대신 주황 테두리 2px + 옅은 주황 배경 + 본문 글자.
+   꽉 찬 주황은 화면마다 CTA 하나에만 쓴다 (v03 접근성 스펙) */
 button[data-variant="pills"][data-selected="true"] {
-  background: var(--action-primary) !important; border-color: var(--action-primary) !important;
+  /* 테두리 2px = 1px 테두리 + 안쪽 1px 그림자 (선택해도 칩 크기가 바뀌지 않게) */
+  background: var(--action-selected-bg) !important; border-color: var(--action-primary) !important;
+  box-shadow: inset 0 0 0 calc(var(--selected-border) - 1px) var(--action-primary);
 }
 button[data-variant="pills"][data-selected="true"] * {
-  color: var(--text-on-primary) !important; font-weight: var(--fw-semibold); background: transparent;
+  color: var(--text-primary) !important; font-weight: var(--fw-semibold); background: transparent;
 }
 
 /* Keyed container -> one-row layout that never wraps, even on mobile

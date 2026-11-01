@@ -152,3 +152,11 @@ def test_trailing_heading_moves_to_next_episode():
     eps = planner.plan(s, 30)
     assert [seg.unit for seg in eps[1].segments] == [0]
     assert eps[2].title == "2강 소개"
+
+
+def test_untitled_episode_uses_first_sentence():
+    # 제목 블록이 없으면 'n화' 대신 첫 문장(30자까지)을 부제로 (v03)
+    s = season([blk("paragraph", "짧은 첫 문장이에요. 다음 문장"), para_minutes(5)])
+    assert planner.plan(s, 5)[0].title == "짧은 첫 문장이에요."
+    long = season([blk("paragraph", "가" * 40), para_minutes(5)])
+    assert planner.plan(long, 5)[0].title == "가" * 30 + "…"

@@ -10,9 +10,10 @@
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
-from .parser import Prediction, Season, Unit
+from .parser import Prediction, Season, Unit, block_text
 
 LOW, HIGH = 0.85, 1.15
 MIN_PIECE_SEC = 5 * 60
@@ -167,7 +168,8 @@ def _heading_before(units: list[Unit], idx: int) -> str:
 
 
 def _title(units: list[Unit], segs: list[Segment], context: str, index: int) -> tuple[str, str]:
-    """회차 제목: 첫 제목 → 첫 강의·영상 이름 → (앞 제목) 이어서 → 'n화'. 다음 회차용 문맥도 돌려준다."""
+    """회차 제목: 첫 제목 → 첫 강의·영상 이름 → (앞 제목) 이어서 → 첫 문장 30자 → 'n화'.
+    다음 회차용 문맥도 돌려준다. ('n화'만 두면 머리의 'n화 · 약 m분'과 겹쳐서 v03에 첫 문장을 넣음)"""
     headings = [units[s.unit].title for s in segs if units[s.unit].heading and units[s.unit].title]
     new_context = headings[-1] if headings else context
     if headings:
@@ -177,7 +179,19 @@ def _title(units: list[Unit], segs: list[Segment], context: str, index: int) -> 
         return lecture, new_context
     if context:
         return f"{context} (이어서)", new_context
-    return f"{index}화", new_context
+    sentence = _first_sentence(units, segs)
+    return (sentence or f"{index}화"), new_context
+
+
+def _first_sentence(units: list[Unit], segs: list[Segment], limit: int = 30) -> str:
+    """구간 첫 글의 첫 문장, 30자 넘으면 자르고 '…'."""
+    for sg in segs:
+        for b in units[sg.unit].blocks:
+            text = " ".join(block_text(b).split())
+            if text:
+                first = re.split(r"(?<=[.!?。])\s|\n", text, maxsplit=1)[0].strip()
+                return first if len(first) <= limit else first[:limit].rstrip() + "…"
+    return ""
 
 
 def segments_between(units: list[Unit], a: Position, b: Position) -> list[Segment]:
