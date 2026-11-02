@@ -1,6 +1,6 @@
 """완결각 — Streamlit 진입점.
 
-흐름: S0 온보딩 → S1 입장 → S2 서재 → (S6 목표·선물·가용시간 / 3일 이상 쉬었으면 S3 복귀 선택) → S2-b 시즌 홈 → S4 회차
+흐름: S1 입장 → (노션을 처음 읽는 동안 인트로) → S2 서재 → (S6 목표·선물·가용시간 / 3일 이상 쉬었으면 S3 복귀 선택) → S2-b 시즌 홈 → S4 회차
 → S5 완료 → (S5-b/S5-c 선물) → (10화 이상 시즌 완결이면 S7 완결 리포트)
 카카오페이지 레퍼런스에서 가져온 것: 시즌 홈의 회차 목록, 하단 고정 '이어보기 · n화', 뷰어식 회차 첫머리.
 """
@@ -14,7 +14,7 @@ import streamlit as st
 from PIL import Image
 
 import ds
-from wangyeol import auth, notion, rules, service, store, text
+from wangyeol import auth, notion, parser, rules, service, store, text
 from wangyeol.render import md, render_segment, reset_images, show
 
 st.set_page_config(page_title="완결각", page_icon=str(Path(__file__).parent / "Icon" / "WGG.svg"), layout="centered")
@@ -132,45 +132,57 @@ def open_episode(state: service.SeasonState, index: int) -> None:
 
 
 @st.cache_data(show_spinner=False)
-def img_tag(name: str, max_px: int = 0, crop_bottom: int = 0, alt: str = "") -> str:
-    """Image 폴더 사진을 WebP <img> 태그로. max_px: 긴 변 줄이기, crop_bottom: 아래에서 잘라 낼 px."""
+def img_tag(name: str, max_px: int = 0, max_ratio: float = 0, quality: int = 88, alt: str = "") -> str:
+    """Image 폴더 사진을 WebP <img> 태그로. max_px: 긴 변 줄이기, max_ratio: 세로/가로가 이보다 길면 아래를 잘라 냄."""
     path = Path(__file__).parent / "Image" / name
     if not name or not path.is_file():
         return ""
     im = Image.open(path).convert("RGB")
-    if crop_bottom:
-        im = im.crop((0, 0, im.width, im.height - crop_bottom))
+    if max_ratio and im.height > round(im.width * max_ratio):
+        im = im.crop((0, 0, im.width, round(im.width * max_ratio)))
     if max_px:
         im.thumbnail((max_px, max_px))
     buf = io.BytesIO()
-    im.save(buf, "WEBP", quality=88)
+    im.save(buf, "WEBP", quality=quality)
     return f'<img src="data:image/webp;base64,{base64.b64encode(buf.getvalue()).decode()}" alt="{escape(alt)}">'
 
 
-# ---------- S0 온보딩 ----------
+# ---------- 인트로 (로그인 뒤 노션을 처음 읽는 동안) ----------
 
-def onboarding() -> None:
-    # 사용자가 준 온보딩 이미지(390×693)에서 아래 53px(그림 속 버튼)만 잘라 내고, 그 자리에 실제 하단 버튼을 둔다
-    st.html(f'<div class="wg-onboard">{img_tag(ONBOARD_IMAGE, crop_bottom=53, alt=ONBOARD_ALT)}</div>')
-    with st.container(key="ds-cta"):
-        if st.button("나의 **첫 완결** 만들기 >", type="primary", width="stretch", key="onboard-start"):
-            ss.onboarded = True
-            st.rerun()
+def intro_while_loading(slot=None) -> None:
+    """노션을 새로 읽어야 할 때(30~40초)만 인트로를 띄우고 서재에 필요한 시즌을 미리 읽어 둔다.
+    이미 읽어 둔 게 있으면 아무것도 띄우지 않는다. 읽기 실패는 서재 화면이 알린다."""
+    try:
+        if notion.is_warm(ss.user["nickname"]):
+            return
+    except notion.NotionError:
+        return  # 목록을 못 읽으면 서재 화면이 알린다
+    slot = slot or st.empty()
+    # 사용자 이미지(390×693)의 그림 속 버튼(아래 53px)은 잘라 낸다 — 390:640 비율이면 크기(1x·3x)와 상관없이 같은 자리
+    slot.html(f'<div class="wg-onboard">{img_tag(ONBOARD_IMAGE, max_ratio=640 / 390, quality=95, alt=ONBOARD_ALT)}</div>')
+    try:
+        for r in notion.seasons_for(ss.user["nickname"]):
+            notion.load_season(r)
+    except notion.NotionError:
+        pass
+    slot.empty()
 
 
 # ---------- S1 입장 ----------
 
 def entry() -> None:
-    st.html('<div class="wg-hero"><div class="wg-hero__title">완결각</div>'
-            '<div class="wg-hero__sub">쌓아 둔 노트를 웹소설처럼 하루 한 화씩</div></div>')
-    # 폼: 입력값과 버튼이 한 번에 제출되도록 (모바일에서 마지막 입력이 누락되지 않게)
-    with st.form("entry", border=False):
-        with st.container(key="wg-fields"):
-            nickname = st.text_input("닉네임 (2~12자)", max_chars=12)
-            pin = st.text_input("PIN 4자리", type="password", max_chars=4)
-        st.caption("처음이면 자동으로 가입돼요")
-        with st.container(key="ds-cta"):
-            submit = st.form_submit_button("시작하기", type="primary", width="stretch")
+    page = st.empty()  # 로그인되면 입력 화면을 통째로 지우고 그 자리에 인트로
+    with page.container():
+        st.html('<div class="wg-hero"><div class="wg-hero__title">완결각</div>'
+                '<div class="wg-hero__sub">쌓아 둔 노트를 웹소설처럼 하루 한 화씩</div></div>')
+        # 폼: 입력값과 버튼이 한 번에 제출되도록 (모바일에서 마지막 입력이 누락되지 않게)
+        with st.form("entry", border=False):
+            with st.container(key="wg-fields"):
+                nickname = st.text_input("닉네임 (2~12자)", max_chars=12)
+                pin = st.text_input("PIN 4자리", type="password", max_chars=4)
+            st.caption("처음이면 자동으로 가입돼요")
+            with st.container(key="ds-cta"):
+                submit = st.form_submit_button("시작하기", type="primary", width="stretch")
     if submit:
         err = auth.validate(nickname.strip(), pin)
         user = None
@@ -182,6 +194,7 @@ def entry() -> None:
         ss.user = user
         ss.pending_cookie = auth.issue_token(user["user_id"])
         log("signup" if is_new else "login")
+        intro_while_loading(page)
         go("library")
 
 
@@ -518,7 +531,7 @@ def episode() -> None:
     if ep.summary_unit is not None:
         with st.container(key=f"wg-summary-{idx}"):
             st.html('<div class="wg-label">1분 요약</div>')
-            show(md(units[ep.summary_unit].blocks[0]["callout"]["rich_text"]))
+            show(md(parser.summary_body(units[ep.summary_unit].blocks[0]["callout"]["rich_text"])))
 
     # 5. 본문
     reset_images()
@@ -688,11 +701,10 @@ if "pending_cookie" in ss:
 if theme() == "dark":
     st.html('<div class="wg-theme-dark"></div>')
 dev_sidebar()
+if "user" in ss and ss.screen == "library":  # 쿠키로 바로 들어왔거나 30분이 지나 노션을 다시 읽어야 할 때
+    intro_while_loading()
 if "user" not in ss:
-    if ss.get("onboarded"):
-        entry()
-    else:
-        onboarding()
+    entry()
 else:
     {"library": library, "home": home, "goal": goal, "gift": gift, "episode": episode,
      "done": done, "gift_arrived": gift_arrived, "comeback": comeback, "report": report}.get(ss.screen, library)()

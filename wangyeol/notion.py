@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
@@ -21,6 +22,8 @@ _NESTABLE = {
     "heading_1", "heading_2", "heading_3", "column_list", "column", "synced_block", "to_do",
 }
 _MAX_DEPTH = 3
+# 노션에서 마지막으로 읽은 때 (캐시 안쪽에서만 기록 — 캐시가 비었는지 알아 인트로를 띄울지 정한다)
+_loaded_at: dict = {}
 
 
 class NotionError(Exception):
@@ -100,10 +103,12 @@ def list_seasons() -> list[dict]:
         if not data.get("has_more"):
             break
         cursor = data["next_cursor"]
-    return [
+    result = [
         {"id": r["id"], "title": _title_of(r), "url": r["url"], "owner": _owner_of(r)}
         for r in rows if not r.get("archived") and not r.get("in_trash")
     ]
+    _loaded_at["_list"] = time.time()
+    return result
 
 
 def seasons_for(nickname: str) -> list[dict]:
@@ -113,7 +118,17 @@ def seasons_for(nickname: str) -> list[dict]:
 
 @st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def _season_blocks(page_id: str) -> list:
-    return _children(_session(), page_id)
+    blocks = _children(_session(), page_id)
+    _loaded_at[page_id] = time.time()
+    return blocks
+
+
+def is_warm(nickname: str) -> bool:
+    """시즌 목록과 이 사람의 시즌 본문을 캐시 시간 안에 읽어 두었는지. 아니면 서재 열기가 30~40초 걸린다(인트로 판단용)."""
+    fresh = lambda key: time.time() - _loaded_at.get(key, 0) < CACHE_TTL - 60
+    if not fresh("_list"):  # 목록도 안 읽었으면 노션에 묻지 않고 바로 False (인트로가 늦게 뜨지 않게)
+        return False
+    return all(fresh(r["id"]) for r in seasons_for(nickname))
 
 
 @st.cache_data(ttl=60 * 60 * 24 * 7, show_spinner=False)
@@ -160,3 +175,4 @@ def load_season(row: dict) -> parser.Season:
 def clear_cache() -> None:
     list_seasons.clear()
     _season_blocks.clear()
+    _loaded_at.clear()

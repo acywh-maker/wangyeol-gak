@@ -46,7 +46,7 @@ class Unit:
     seconds: float
     title: str = ""  # 제목 블록 / 강의 이름
     heading: bool = False  # 제목1~3으로 시작 → 허용 범위 안에서 우선 경계
-    is_callout: bool = False
+    is_summary: bool = False  # '요약'·'1분 요약'으로 시작하는 콜아웃 = 1분 요약 (그 외 콜아웃은 본문)
     youtube: dict | None = None  # {"id", "range": (start, end) | None}
     prediction: Prediction | None = None
 
@@ -75,6 +75,24 @@ class Season:
 
 def plain(rich_text: list | None) -> str:
     return "".join(rt.get("plain_text", "") for rt in rich_text or [])
+
+
+# 1분 요약 표시: 콜아웃 글이 "요약" 또는 "1분 요약"으로 시작 (뒤에 : - · 붙어도 됨). 소제목처럼 쓴 콜아웃과 구분 (v03 사용자 확정)
+SUMMARY_MARK = re.compile(r"\s*(?:1\s*분\s*)?요약(?=$|[\s:：\-–·])\s*[:：\-–·]?\s*")  # '요약하자면'은 아님
+
+
+def summary_body(rich_text: list) -> list:
+    """1분 요약 콜아웃 글에서 앞의 '요약' 표시를 뺀 rich_text (화면에는 '1분 요약' 이름표가 따로 있다)."""
+    m = SUMMARY_MARK.match(plain(rich_text))
+    skip, out = m.end() if m else 0, []
+    for rt in rich_text:
+        t = rt.get("plain_text", "")
+        if skip >= len(t):
+            skip -= len(t)
+            continue
+        out.append({**rt, "plain_text": t[skip:]} if skip else rt)
+        skip = 0
+    return out
 
 
 def rich_text_of(block: dict) -> list:
@@ -325,7 +343,7 @@ def build_units(blocks: list, video_info: Callable[[str], dict | None] = lambda 
             "text", [b], sec,
             title=_heading_text(b) if t in _HEADINGS else "",
             heading=t in _HEADINGS,
-            is_callout=t == "callout",
+            is_summary=t == "callout" and bool(SUMMARY_MARK.match(plain(rich_text_of(b)))),
         ))
         i += 1
     return units

@@ -13,7 +13,18 @@ def test_text_units_and_headings():
     assert [u.kind for u in us] == ["text", "text", "text"]
     assert us[0].heading and us[0].title == "목표"
     assert abs(us[1].seconds - 60) < 1
-    assert us[2].is_callout
+    assert us[2].is_summary
+
+
+def test_summary_needs_mark():
+    """'요약'·'1분 요약'으로 시작하는 콜아웃만 1분 요약. 소제목처럼 쓴 콜아웃은 본문."""
+    texts = ["1분 요약: 핵심은 A", "요약 - 핵심은 A", "요약", "도메인이란?", "요약하자면 A"]
+    assert [units([blk("callout", t)])[0].is_summary for t in texts] == [True, True, True, False, False]
+
+
+def test_summary_body_strips_mark():
+    body = parser.summary_body([rt("1분 "), rt("요약: 핵심"), rt("은 A")])
+    assert parser.plain(body) == "핵심은 A"
 
 
 def test_reading_seconds_mixed():

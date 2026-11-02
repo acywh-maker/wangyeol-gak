@@ -151,7 +151,7 @@ def _build(units: list[Unit], raw: list[tuple[Position, Position, list[Segment]]
             ep.title += " (이어서)"  # 앞 조각은 이미 지난 회차라 전체 개수를 알 수 없음
         elif first_media is not None and len(pieces[first_media]) > 1:
             ep.title += f" ({pieces[first_media].index(k) + 1}/{len(pieces[first_media])})"
-        ep.summary_unit = next((s.unit for s in segs if units[s.unit].is_callout), None)
+        ep.summary_unit = next((s.unit for s in segs if units[s.unit].is_summary), None)
         preds = [units[s.unit].prediction for s in segs if units[s.unit].prediction and s.end >= units[s.unit].seconds]
         ep.prediction = preds[-1] if preds else None
         episodes.append(ep)

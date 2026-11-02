@@ -97,7 +97,7 @@ def test_prediction_on_episode_and_hidden_on_last():
 
 
 def test_summary_and_continuation_title():
-    s = season([blk("heading_2", "1. 목표"), blk("callout", "요약"), para_minutes(10), para_minutes(10)])
+    s = season([blk("heading_2", "1. 목표"), blk("callout", "요약: 목표부터"), para_minutes(10), para_minutes(10)])
     eps = planner.plan(s, 10)
     assert eps[0].title == "1. 목표" and eps[0].summary_unit == 1
     assert eps[1].title == "1. 목표 (이어서)"
