@@ -8,9 +8,17 @@ def t(m, d, h, mi=0):
     return datetime(2026, m, d, h, mi, tzinfo=KST)
 
 
-def test_arrival_next_day_6am():
-    assert rules.arrival_after(t(10, 29, 21)) == t(10, 30, 6)
-    assert rules.arrival_after(t(10, 30, 1)) == t(10, 31, 6)  # 새벽 1시에 끝내도 다음 날 06:00
+def test_arrival_first_1930_after_completion():
+    assert rules.arrival_after(t(10, 29, 21)) == t(10, 30, 19, 30)  # 밤에 끝내면 다음 날 저녁
+    assert rules.arrival_after(t(10, 30, 1)) == t(10, 30, 19, 30)  # 새벽에 끝내면 그날 저녁
+    assert rules.arrival_after(t(10, 30, 15)) == t(10, 30, 19, 30)
+    assert rules.arrival_after(t(10, 30, 19, 30)) == t(10, 31, 19, 30)  # 정각이면 다음 날
+
+
+def test_wait_progress_over_24_hours():
+    assert rules.wait_progress(t(10, 29, 19, 30), t(10, 30, 19, 30)) == 0.0
+    assert rules.wait_progress(t(10, 30, 7, 30), t(10, 30, 19, 30)) == 0.5
+    assert rules.wait_progress(t(10, 30, 20), t(10, 30, 19, 30)) == 1.0
 
 
 def test_arrival_text():
@@ -34,8 +42,8 @@ def test_season_status():
     now = t(10, 29, 22)
     assert rules.season_status(False, 0, 10, 1, None, now) == ("new", "새 시즌")
     assert rules.season_status(True, 0, 10, 1, None, now) == ("arrived", "오늘의 화 도착")
-    assert rules.season_status(True, 3, 10, 4, t(10, 29, 21), now) == ("waiting", "8시간 0분 남음")
-    assert rules.season_status(True, 3, 10, 4, t(10, 29, 21), t(10, 30, 6)) == ("arrived", "오늘의 화 도착")
+    assert rules.season_status(True, 3, 10, 4, t(10, 29, 21), now) == ("waiting", "21시간 30분 남음")
+    assert rules.season_status(True, 3, 10, 4, t(10, 29, 21), t(10, 30, 19, 30)) == ("arrived", "오늘의 화 도착")
     assert rules.season_status(True, 10, 10, 11, t(10, 29, 21), now) == ("done", "완결")
 
 

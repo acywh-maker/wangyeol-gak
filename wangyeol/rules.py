@@ -5,7 +5,8 @@ import math
 from datetime import datetime, timedelta, timezone
 
 KST = timezone(timedelta(hours=9))  # 한국은 서머타임이 없어 고정 오프셋으로 충분
-ARRIVAL_HOUR = 6  # BR-002 기본값
+ARRIVAL_HOUR, ARRIVAL_MINUTE = 19, 30  # BR-002: 매일 저녁 7시 30분 (v03 사용자 지정, 06:00에서 변경)
+WAIT_SPAN = timedelta(hours=24)  # 서재 대기 막대의 전체 길이
 RETURN_DAYS = 3  # BR-003 기본값
 
 
@@ -18,9 +19,16 @@ def parse_ts(ts: str | None) -> datetime | None:
 
 
 def arrival_after(completed_at: datetime) -> datetime:
-    """BR-002: 완료한 다음 날 06:00."""
-    day = completed_at.astimezone(KST).date() + timedelta(days=1)
-    return datetime(day.year, day.month, day.day, ARRIVAL_HOUR, tzinfo=KST)
+    """BR-002: 완료한 뒤 처음 오는 19:30 (항상 24시간 안). 19:30 정각에 끝내면 다음 날 19:30."""
+    done = completed_at.astimezone(KST)
+    t = done.replace(hour=ARRIVAL_HOUR, minute=ARRIVAL_MINUTE, second=0, microsecond=0)
+    return t if t > done else t + timedelta(days=1)
+
+
+def wait_progress(now: datetime, arrival: datetime) -> float:
+    """서재 대기 막대가 찬 정도(0~1): 도착까지 24시간 중 지나간 몫."""
+    left = (arrival - now) / WAIT_SPAN
+    return min(1.0, max(0.0, 1 - left))
 
 
 def remain_text(now: datetime, arrival: datetime) -> str:
@@ -43,12 +51,12 @@ def day_text(now: datetime, t: datetime) -> str:
 
 
 def arrival_text(now: datetime, arrival: datetime) -> str:
-    """시즌 홈 회차 목록: '내일 오전 6시 도착 · 14시간 30분 남음'"""
+    """시즌 홈 회차 목록: '내일 오후 7시 30분 도착 · 14시간 30분 남음'"""
     return f"{day_text(now, arrival)} {clock_text(arrival)} 도착 · {remain_text(now, arrival)}"
 
 
 def arrival_sentence(now: datetime, arrival: datetime, ep_no: int) -> str:
-    """S5 다음 화 안내: '내일 오전 6시에 2화가 도착해요 · 14시간 30분 남음'"""
+    """S5 다음 화 안내: '내일 오후 7시 30분에 2화가 도착해요 · 14시간 30분 남음'"""
     return f"{day_text(now, arrival)} {clock_text(arrival)}에 {ep_no}화가 도착해요 · {remain_text(now, arrival)}"
 
 

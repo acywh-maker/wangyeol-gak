@@ -166,8 +166,11 @@ def library() -> None:
         with st.container(key=f"wg-card-{s.row['id']}"):
             done_cls = " wg-card--done" if kind == "done" else ""
             # 화면 낭독기는 덮개 버튼 이름(시즌명, 상태, 진행)만 읽는다 — 보이는 글자는 낭독에서 숨김
+            # 도착 전이면 남은 시간 배지 안이 24시간에 걸쳐 차오른다 (v03 사용자 지정)
+            tag = (f'<span class="wg-badge wg-badge--timer" style="--fill:{rules.wait_progress(now(), s.arrival()):.0%}">'
+                   f'{escape(label)}</span>') if kind == "waiting" else badge(kind, label)
             st.html(f'<div aria-hidden="true"><div class="wg-card-title{done_cls}">{escape(s.row["title"])}</div>'
-                    f'<div class="wg-card-meta">{badge(kind, label)}<span>{progress}</span></div></div>')
+                    f'<div class="wg-card-meta">{tag}<span>{progress}</span></div></div>')
             if st.button(f"{s.row['title']}, {label}, {progress}", key=f"open-{s.row['id']}", width="stretch"):
                 enter_season(s)
 
@@ -318,7 +321,7 @@ def goal() -> None:
 
     if ss.get("goal_edit"):
         back("시즌 홈", "home")
-    st.html(f'<div class="wg-title">목표를 정하고, 해낸 나에게 줄<br>선물도 준비해요{ds.icon("fantasybook", "wg-icon--deco")}</div>')
+    st.html('<div class="wg-title">목표를 정하고, 해낸 나에게 줄<br>선물도 준비해요</div>')
 
     st.html('<div class="wg-label">하루에 얼마나 볼까요?</div>')
     # v02: 직접 입력 없앰. 예전에 직접 입력한 값(예: 25분)이면 아무 칩도 선택되지 않은 채 그 값을 유지
@@ -464,7 +467,7 @@ def episode() -> None:
         # 3. 지난 화 내 한 줄 보기
         prev_line = store.get_line(uid, sid, idx - 1)
         if prev_line:
-            with st.container(key="wg-prev-line"), st.expander("지난 화 내 한 줄 보기"):  # 테두리 없음 (v03 2차)
+            with st.expander("지난 화 내 한 줄 보기"):  # 모양은 tokens.css 접기 공통 규칙
                 st.write(prev_line)
 
     # 4. 1분 요약
@@ -580,7 +583,7 @@ def gift_arrived() -> None:
               f'<div>{escape(g.get("letter_text", "")).replace(chr(10), "<br>")}</div></div>') if written and g.get("letter_text") else ""
     if g["kind"] == "letter":
         st.html(f'<div class="wg-label">중간 선물 · {idx}화</div>'
-                f'<div class="wg-title">나와의 약속을 지켜낸 {nick}님 선물이 도착했어요</div>{letter}')
+                f'<div class="wg-title">나와의 약속을 지켜낸 {nick}님<br>선물이 도착했어요</div>{letter}')
     else:
         box = (f'<div class="wg-gift-box"><div class="wg-gift__img"></div><div>{escape(g.get("gift_item", ""))}</div>'
                f'<div class="wg-stamp">선물 도착</div></div>') if g["kind"] == "gifticon" else ""

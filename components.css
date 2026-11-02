@@ -74,6 +74,9 @@ img, iframe, video { max-width: 100%; }
 .wg-badge--done { background: var(--status-done-bg); color: var(--status-done-fg); padding: 0 var(--space-4); }
 /* 테두리 배지도 표면 색을 채워 어느 배경(카드·다크 페이지) 위에서나 같은 모습 */
 .wg-badge--new { background: var(--bg-surface); border: 1px solid var(--status-new-line); color: var(--text-on-surface-muted); }
+/* 서재 대기 막대: 알약 안이 24시간에 걸쳐 왼쪽부터 차오른다. --fill은 app.py가 넣는다 (v03 사용자 지정) */
+.wg-badge--timer { border: 1px solid var(--line-default); color: var(--text-on-surface);
+  background: linear-gradient(to right, var(--bg-placeholder) var(--fill, 0%), var(--bg-surface) var(--fill, 0%)); }
 .wg-badge--done-ep { background: var(--status-waiting-bg); color: var(--text-on-surface-muted); }
 .wg-badge--gift { background: var(--bg-surface); border: 1px solid var(--status-gift-line); color: var(--text-on-surface); }
 
@@ -85,9 +88,6 @@ img, iframe, video { max-width: 100%; }
 .wg-ep__tags { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-2); }
 .wg-ep--done .wg-ep__title, .wg-ep--done .wg-ep__no { color: var(--status-read-fg); }
 .wg-ep--current { padding-left: var(--space-5); padding-right: var(--space-5); }
-
-/* S4 '지난 화 내 한 줄 보기': 테두리 없음 (v03 2차 사용자 지정. 노션 토글은 그대로) */
-.stApp .st-key-wg-prev-line [data-testid="stExpander"] details { border-color: transparent; background: var(--bg-surface); }  /* 닫혀 있어도 카드 바탕, 펼쳤을 때 제목 아래 가로선은 유지 */
 
 /* 뷰어식 첫머리 */
 .wg-viewer-head { text-align: left; padding: var(--space-9) 0 var(--space-8); border-bottom: 1px solid var(--line-default); margin-bottom: var(--space-8); }
