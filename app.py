@@ -195,18 +195,16 @@ def entry() -> None:
         ss.pending_cookie = auth.issue_token(user["user_id"])
         log("signup" if is_new else "login")
         intro_while_loading(page)
-        ss.demo_pending = user["nickname"] == demo.COMEBACK_NICK  # 시연 계정이면 서재에서 '3화까지 보고 4일 쉰' 상태로
         go("library")
 
 
 # ---------- S2 내 서재 ----------
 
 def library() -> None:
-    if ss.user["nickname"] == demo.COMEBACK_NICK:  # 시연 계정: PIN 입장 때, 또는 시연 상태가 아니면 되돌림
+    if ss.user["nickname"] == demo.DEMO_NICK:  # 시연 계정: 시연 기록이 없을 때만 12화까지 본 상태로 (보던 기록은 그대로)
         try:
-            if ss.get("demo_pending") or demo.needs_reset(ss.user):
-                demo.reset_comeback(ss.user, now())
-            ss.demo_pending = False
+            if demo.needs_seed(ss.user):
+                demo.seed_demo(ss.user, now())
         except (notion.NotionError, demo.DemoError, StopIteration) as e:  # 숨기지 않고, 다음 서재 열기(새로고침)에서 다시 시도
             st.warning(f"시연 상태를 아직 못 만들었어요. 새로고침하면 다시 시도해요 ({e})")
     try:
@@ -701,7 +699,7 @@ def dev_sidebar() -> None:
 @st.cache_resource(show_spinner=False)
 def _demo_ready() -> bool:
     """앱이 켜질 때 한 번: 시연 계정 '소설'이 없으면 만든다(배포 사이트는 Reboot하면 기록이 지워진다)."""
-    demo.ensure_comeback_user(now())
+    demo.ensure_demo_user(now())
     return True
 
 

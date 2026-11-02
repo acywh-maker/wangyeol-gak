@@ -1,7 +1,8 @@
 """시연·점검 계정: 시즌을 n화까지 본 상태를 만든다 (UI 없음).
 
-- 시연 계정 '소설'(배포 사이트용): 앱이 켜질 때 계정을 만들어 두고, PIN으로 들어올 때마다
-  '논리의 기초'를 3화까지 보고 4일 쉰 상태로 되돌린다 → 시즌을 열면 S3 복귀 선택("4일 만이네요").
+- 시연 계정 '소설'(배포 사이트용): 앱이 켜질 때 계정을 만들어 두고, 시연 기록이 없을 때(Reboot 직후 등) 한 번만
+  '논리의 기초'를 12화까지(한 줄 12개) 본 상태로 만든다 → 13화를 다 보면 S5 → S5-c 완결 선물 → S7 완결 리포트.
+  이미 보던 기록은 PIN으로 다시 들어와도 지우지 않는다(사용자 요청).
 - scripts/seed_review_users.py(로컬 점검 계정)도 같은 seed_season을 쓴다.
 """
 from __future__ import annotations
@@ -14,9 +15,12 @@ PIN = "1357"  # 시연·점검용 (공개 저장소에 있음 — 실제 사용�
 SEASON_TITLE = "논리의 기초"
 MINUTES = 20
 LINES = {1: "전제가 참이어도 결론이 거짓일 수 있다.", 2: "타당성과 건전성은 다르다.",
-         3: "반례 하나로 충분하다.", 5: "숨은 전제부터 찾자.", 9: "조건문은 거꾸로 읽으면 안 된다.",
-         12: "논리는 결국 말의 정리다."}
-COMEBACK_NICK, COMEBACK_DONE, COMEBACK_AWAY = "소설", 3, 4  # 3화까지 보고 4일 쉼 (사용자 지정)
+         3: "반례 하나로 충분하다.", 4: "말이 길어질수록 주장부터 찾는다.", 5: "숨은 전제부터 찾자.",
+         6: "그럴듯함과 옳음은 다르다.", 7: "근거가 결론을 정말 받쳐 주는지 묻는다.", 8: "모두와 어떤을 구분하자.",
+         9: "조건문은 거꾸로 읽으면 안 된다.", 10: "필요조건과 충분조건을 헷갈리지 말자.",
+         11: "반박은 사람이 아니라 논증을 향한다.", 12: "논리는 결국 말의 정리다."}
+# 완결 리포트(S7) 시연: 12화까지 보고 2일 전 밤이 마지막 → 13화는 어제 저녁 도착, 3일 미만이라 복귀 화면 없음 (사용자 지정)
+DEMO_NICK, DEMO_DONE, DEMO_AWAY = "소설", 12, 2
 
 
 class DemoError(Exception):
@@ -55,21 +59,19 @@ def seed_season(user_id: str, row: dict, done: int, away_days: int, now: datetim
                     letter_text="끝까지 온 나에게. 수고했어, 커피 한 잔 하자.")
 
 
-def ensure_comeback_user(now: datetime) -> None:
+def ensure_demo_user(now: datetime) -> None:
     """시연 계정이 없으면 만든다(배포 사이트는 Reboot하면 기록이 지워지므로 켜질 때마다 확인)."""
-    if not store.get_user(COMEBACK_NICK):
-        auth.enter(COMEBACK_NICK, PIN, now.isoformat())
+    if not store.get_user(DEMO_NICK):
+        auth.enter(DEMO_NICK, PIN, now.isoformat())
 
 
-def needs_reset(user: dict) -> bool:
-    """시연 계정인데 시연 상태(하루 20분 계획)가 아니면 True — 시드가 실패해 옛 기록이 남은 경우를 새로고침으로 복구."""
-    if user["nickname"] != COMEBACK_NICK:
+def needs_seed(user: dict) -> bool:
+    """시연 계정인데 시연 기록(하루 20분 계획)이 없으면 True. 보던 기록이 있으면 False(지우지 않음)."""
+    if user["nickname"] != DEMO_NICK:
         return False
     p = store.get_progress(user["user_id"], season_row()["id"])
     return not p or p.get("minutes") != MINUTES
 
 
-def reset_comeback(user: dict, now: datetime) -> None:
-    """시연 계정으로 PIN 입장할 때마다 '3화까지 보고 4일 쉰' 상태로 되돌린다(몇 번이고 같은 시연)."""
-    if user["nickname"] == COMEBACK_NICK:
-        seed_season(user["user_id"], season_row(), COMEBACK_DONE, COMEBACK_AWAY, now)
+def seed_demo(user: dict, now: datetime) -> None:
+    seed_season(user["user_id"], season_row(), DEMO_DONE, DEMO_AWAY, now)
