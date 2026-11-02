@@ -195,16 +195,20 @@ def entry() -> None:
         ss.pending_cookie = auth.issue_token(user["user_id"])
         log("signup" if is_new else "login")
         intro_while_loading(page)
-        try:
-            demo.reset_comeback(user, now())  # 시연 계정 '소설'이면 3화까지 보고 4일 쉰 상태로
-        except notion.NotionError:
-            pass  # 노션을 못 읽으면 기록을 그대로 두고 서재가 오류를 알린다
+        ss.demo_pending = user["nickname"] == demo.COMEBACK_NICK  # 시연 계정이면 서재에서 '3화까지 보고 4일 쉰' 상태로
         go("library")
 
 
 # ---------- S2 내 서재 ----------
 
 def library() -> None:
+    if ss.user["nickname"] == demo.COMEBACK_NICK:  # 시연 계정: PIN 입장 때, 또는 시연 상태가 아니면 되돌림
+        try:
+            if ss.get("demo_pending") or demo.needs_reset(ss.user):
+                demo.reset_comeback(ss.user, now())
+            ss.demo_pending = False
+        except (notion.NotionError, StopIteration):  # 실패를 숨기지 않고, 다음 서재 열기(새로고침)에서 다시 시도
+            st.warning("시연 상태를 아직 못 만들었어요. 새로고침하면 다시 시도해요")
     try:
         rows = notion.seasons_for(ss.user["nickname"])
         states = [service.load_state(ss.user["user_id"], r, now()) for r in rows]

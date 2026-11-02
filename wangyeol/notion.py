@@ -41,10 +41,19 @@ def _session() -> requests.Session:
 
 
 def _request(s: requests.Session, method: str, path: str, **kwargs) -> dict:
-    try:
-        r = s.request(method, f"{API}/{path}", timeout=20, **kwargs)
-    except requests.RequestException as e:
-        raise NotionError(str(e)) from e
+    # 429(요청 과다, 노션은 초당 약 3회): Retry-After만큼(없으면 1→2→4초) 기다렸다 최대 3번 다시
+    for wait in (1, 2, 4, None):
+        try:
+            r = s.request(method, f"{API}/{path}", timeout=20, **kwargs)
+        except requests.RequestException as e:
+            raise NotionError(str(e)) from e
+        if r.status_code != 429 or wait is None:
+            break
+        try:
+            wait = max(wait, min(float(r.headers.get("Retry-After", 0)), 10))
+        except ValueError:
+            pass
+        time.sleep(wait)
     if r.status_code != 200:
         raise NotionError(f"{r.status_code}: {r.json().get('message', '') if r.content else ''}")
     return r.json()

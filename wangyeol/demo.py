@@ -53,6 +53,14 @@ def ensure_comeback_user(now: datetime) -> None:
         auth.enter(COMEBACK_NICK, PIN, now.isoformat())
 
 
+def needs_reset(user: dict) -> bool:
+    """시연 계정인데 시연 상태(하루 20분 계획)가 아니면 True — 시드가 실패해 옛 기록이 남은 경우를 새로고침으로 복구."""
+    if user["nickname"] != COMEBACK_NICK:
+        return False
+    p = store.get_progress(user["user_id"], season_row()["id"])
+    return not p or p.get("minutes") != MINUTES
+
+
 def reset_comeback(user: dict, now: datetime) -> None:
     """시연 계정으로 PIN 입장할 때마다 '3화까지 보고 4일 쉰' 상태로 되돌린다(몇 번이고 같은 시연)."""
     if user["nickname"] == COMEBACK_NICK:
