@@ -5,6 +5,11 @@
 /* 읽기 앱이라 본문 폭과 글자 크기를 키운다. 맨 위 여백은 모든 화면 같게 (v02) */
 [data-testid="stMainBlockContainer"] { max-width: var(--reading-max); padding-top: var(--page-top); }
 
+/* S0 온보딩: 이미지를 화면 맨 위에 꽉 차게(390px 폭 디자인), 페이지 바탕은 이미지 바탕색. 하단 바는 ds-cta 그대로 */
+.stApp:has(.wg-onboard) { background: var(--bg-onboarding); }
+.stApp:has(.wg-onboard) [data-testid="stMainBlockContainer"] { padding-top: 0; padding-left: 0; padding-right: 0; max-width: 390px; }
+.wg-onboard img { display: block; width: 100%; height: auto; }
+
 /* SVG 아이콘 (ds.icon): 모양은 마스크, 색은 글자색을 따른다 */
 .wg-icon { display: inline-block; vertical-align: middle; flex: none; background-color: currentColor;
   -webkit-mask: var(--icon) no-repeat center / contain; mask: var(--icon) no-repeat center / contain; }
@@ -120,6 +125,7 @@ img, iframe, video { max-width: 100%; }
 .wg-gift__img { aspect-ratio: 1 / 1; background: var(--bg-placeholder); border-radius: var(--radius-sm); margin-bottom: var(--space-3);
   outline: 2px solid transparent; outline-offset: -2px; transition: outline-color var(--dur-fast) var(--ease-standard); }
 .wg-gift__img--picked { outline-color: var(--action-primary); }
+.wg-gift__img img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 /* 선물 카드 전체 탭: 상품 버튼은 보이게 두고, 버튼의 누르는 영역(::after)만 카드 전체로 넓힌다 */
 [class*="st-key-wg-gift-"] { position: relative; cursor: pointer; }
 [class*="st-key-wg-gift-"] [data-testid="stElementContainer"]:has(.stButton),

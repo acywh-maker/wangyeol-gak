@@ -46,6 +46,7 @@
   --bg-notice: #FAFAF6;
   --bg-placeholder: var(--gray-200);
   --bg-box: var(--bg-surface);
+  --bg-onboarding: #161616;
   /* semantic.text */
   --text-strong: #1F1D1A;
   --text-primary: #1F1D1A;

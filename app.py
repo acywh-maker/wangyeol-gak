@@ -1,28 +1,40 @@
 """완결각 — Streamlit 진입점.
 
-흐름: S1 입장 → S2 서재 → (S6 목표·선물·가용시간 / 3일 이상 쉬었으면 S3 복귀 선택) → S2-b 시즌 홈 → S4 회차
+흐름: S0 온보딩 → S1 입장 → S2 서재 → (S6 목표·선물·가용시간 / 3일 이상 쉬었으면 S3 복귀 선택) → S2-b 시즌 홈 → S4 회차
 → S5 완료 → (S5-b/S5-c 선물) → (10화 이상 시즌 완결이면 S7 완결 리포트)
 카카오페이지 레퍼런스에서 가져온 것: 시즌 홈의 회차 목록, 하단 고정 '이어보기 · n화', 뷰어식 회차 첫머리.
 """
+import base64
+import io
 from datetime import timedelta
 from html import escape
+from pathlib import Path
 
 import streamlit as st
+from PIL import Image
 
 import ds
 from wangyeol import auth, notion, rules, service, store, text
 from wangyeol.render import md, render_segment, reset_images, show
 
-st.set_page_config(page_title="완결각", page_icon="📖", layout="centered")
+st.set_page_config(page_title="완결각", page_icon=str(Path(__file__).parent / "Icon" / "WGG.svg"), layout="centered")
 ds.apply()
 
 LOAD_ERROR = "노트를 불러오지 못했어요. 잠시 후 다시 시도해 주세요"
 MINUTE_CHOICES = [5, 10, 20, 30, 60]
 SAVE_HINT = "'이대로 약속하기'를 누르면 저장돼요"
 GIFT_ITEMS = {  # FR-010: 일반 상품명 + (예시), 가격 없음
-    "커피": ["아메리카노 (예시)", "카페라테 (예시)", "바닐라라테 (예시)", "콜드브루 (예시)"],
-    "디저트": ["조각 케이크 (예시)", "마카롱 세트 (예시)", "쿠키 세트 (예시)", "크로플 (예시)"],
+    "커피": ["아메리카노 (예시)", "연유라테 (예시)", "바닐라라테 (예시)", "콜드브루 (예시)"],
+    "디저트": ["조각 케이크 (예시)", "마카롱 세트 (예시)", "쿠키 세트 (예시)", "도넛 (예시)"],
 }
+GIFT_IMAGES = {  # 상품명 → Image 폴더 파일
+    "아메리카노 (예시)": "아이스 아메리카노.png", "연유라테 (예시)": "연유라테.png",
+    "바닐라라테 (예시)": "바닐라아이스라테.png", "콜드브루 (예시)": "콜드부르.png",
+    "조각 케이크 (예시)": "조각 케이크.png", "마카롱 세트 (예시)": "마카롱.png",
+    "쿠키 세트 (예시)": "쿠키.png", "도넛 (예시)": "도넛.png",
+}
+ONBOARD_IMAGE = "온보딩.png"
+ONBOARD_ALT = "나를 위한 맞춤 연재, Wan Gyeol-Gak. 쌓아둔 자료가, 기다려지는 다음 화로. 쌓아둔 자료를 오늘부터 한 화씩 완결해요."
 
 ss = st.session_state
 ss.setdefault("screen", "library")
@@ -117,6 +129,33 @@ def enter_season(state: service.SeasonState) -> None:
 
 def open_episode(state: service.SeasonState, index: int) -> None:
     go("episode", season_id=state.row["id"], ep_index=index)
+
+
+@st.cache_data(show_spinner=False)
+def img_tag(name: str, max_px: int = 0, crop_bottom: int = 0, alt: str = "") -> str:
+    """Image 폴더 사진을 WebP <img> 태그로. max_px: 긴 변 줄이기, crop_bottom: 아래에서 잘라 낼 px."""
+    path = Path(__file__).parent / "Image" / name
+    if not name or not path.is_file():
+        return ""
+    im = Image.open(path).convert("RGB")
+    if crop_bottom:
+        im = im.crop((0, 0, im.width, im.height - crop_bottom))
+    if max_px:
+        im.thumbnail((max_px, max_px))
+    buf = io.BytesIO()
+    im.save(buf, "WEBP", quality=88)
+    return f'<img src="data:image/webp;base64,{base64.b64encode(buf.getvalue()).decode()}" alt="{escape(alt)}">'
+
+
+# ---------- S0 온보딩 ----------
+
+def onboarding() -> None:
+    # 사용자가 준 온보딩 이미지(390×693)에서 아래 53px(그림 속 버튼)만 잘라 내고, 그 자리에 실제 하단 버튼을 둔다
+    st.html(f'<div class="wg-onboard">{img_tag(ONBOARD_IMAGE, crop_bottom=53, alt=ONBOARD_ALT)}</div>')
+    with st.container(key="ds-cta"):
+        if st.button("나의 **첫 완결** 만들기 >", type="primary", width="stretch", key="onboard-start"):
+            ss.onboarded = True
+            st.rerun()
 
 
 # ---------- S1 입장 ----------
@@ -391,6 +430,11 @@ def goal() -> None:
             go("home", flash="편지를 저장했어요" if wrote else "")
 
 
+def gift_img(item: str) -> str:
+    """선물 이미지. 원본(823px PNG)은 그대로 두고, 화면 크기에 맞게 480px로 줄여 보낸다."""
+    return img_tag(GIFT_IMAGES.get(item, ""), max_px=480)
+
+
 def gift() -> None:
     draft = ss.get("goal_draft") or {}
     back("목표와 선물", "goal")
@@ -402,7 +446,7 @@ def gift() -> None:
             for item in row:
                 picked = draft.get("gift_item") == item  # 고른 상품: 이미지 테두리 + 버튼 선택 상태(CSS, v03)
                 with st.container(key=f"wg-gift-{item}"):
-                    st.html(f'<div class="wg-gift__img{" wg-gift__img--picked" if picked else ""}"></div>')
+                    st.html(f'<div class="wg-gift__img{" wg-gift__img--picked" if picked else ""}">{gift_img(item)}</div>')
                     if st.button(item, key=f"pick-{item}", width="stretch"):
                         if picked:  # 다시 누르면 기프티콘 선택 해제
                             draft["gift_item"] = ""
@@ -585,7 +629,8 @@ def gift_arrived() -> None:
         st.html(f'<div class="wg-label">중간 선물 · {idx}화</div>'
                 f'<div class="wg-title">나와의 약속을 지켜낸 {nick}님<br>선물이 도착했어요</div>{letter}')
     else:
-        box = (f'<div class="wg-gift-box"><div class="wg-gift__img"></div><div>{escape(g.get("gift_item", ""))}</div>'
+        box = (f'<div class="wg-gift-box"><div class="wg-gift__img">{gift_img(g.get("gift_item", ""))}</div>'
+               f'<div>{escape(g.get("gift_item", ""))}</div>'
                f'<div class="wg-stamp">선물 도착</div></div>') if g["kind"] == "gifticon" else ""
         body = box + letter  # 기프티콘에 편지를 동봉했으면 둘 다
         st.html(f'<div class="wg-title wg-title--sm">스스로 정한 목표를 끝까지 지킨 {nick}님.<br>정말 대단해요, 약속한 선물이에요.<br>축하드려요!</div>{body}')
@@ -644,7 +689,10 @@ if theme() == "dark":
     st.html('<div class="wg-theme-dark"></div>')
 dev_sidebar()
 if "user" not in ss:
-    entry()
+    if ss.get("onboarded"):
+        entry()
+    else:
+        onboarding()
 else:
     {"library": library, "home": home, "goal": goal, "gift": gift, "episode": episode,
      "done": done, "gift_arrived": gift_arrived, "comeback": comeback, "report": report}.get(ss.screen, library)()
