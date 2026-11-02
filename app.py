@@ -207,8 +207,8 @@ def library() -> None:
             if ss.get("demo_pending") or demo.needs_reset(ss.user):
                 demo.reset_comeback(ss.user, now())
             ss.demo_pending = False
-        except (notion.NotionError, StopIteration):  # 실패를 숨기지 않고, 다음 서재 열기(새로고침)에서 다시 시도
-            st.warning("시연 상태를 아직 못 만들었어요. 새로고침하면 다시 시도해요")
+        except (notion.NotionError, demo.DemoError, StopIteration) as e:  # 숨기지 않고, 다음 서재 열기(새로고침)에서 다시 시도
+            st.warning(f"시연 상태를 아직 못 만들었어요. 새로고침하면 다시 시도해요 ({e})")
     try:
         rows = notion.seasons_for(ss.user["nickname"])
         states = [service.load_state(ss.user["user_id"], r, now()) for r in rows]

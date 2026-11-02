@@ -19,6 +19,10 @@ LINES = {1: "전제가 참이어도 결론이 거짓일 수 있다.", 2: "타당
 COMEBACK_NICK, COMEBACK_DONE, COMEBACK_AWAY = "소설", 3, 4  # 3화까지 보고 4일 쉼 (사용자 지정)
 
 
+class DemoError(Exception):
+    pass
+
+
 def season_row() -> dict:
     return next(r for r in notion.list_seasons() if r["title"] == SEASON_TITLE)
 
@@ -26,8 +30,11 @@ def season_row() -> dict:
 def seed_season(user_id: str, row: dict, done: int, away_days: int, now: datetime) -> None:
     """기록을 지우고, 하루 한 화씩 done화까지 본 뒤 away_days일 쉰 상태로 만든다(완료는 매일 밤 9시)."""
     episodes = planner.plan(notion.load_season(row), MINUTES)
+    if len(episodes) <= done:  # 영상 길이를 못 읽어 시즌이 짧게 잡힌 경우 등
+        raise DemoError(f"'{row['title']}' 시즌이 {len(episodes)}화뿐이라 {done}화까지 본 상태를 만들 수 없어요")
     sid = row["id"]
-    mid, final = rules.gift_points(len(episodes))
+    points = rules.gift_points(len(episodes))  # 9화 이하면 완결 선물 하나뿐
+    mid, final = (points[0] if len(points) > 1 else None), points[-1]
     store.clear_user_records(user_id)
     last_day = (now - timedelta(days=away_days)).replace(hour=21, minute=0, second=0, microsecond=0)
     for ep in episodes[:done]:
@@ -39,12 +46,13 @@ def seed_season(user_id: str, row: dict, done: int, away_days: int, now: datetim
     store.save_progress(user_id, sid, minutes=MINUTES, plan=[e.start for e in episodes], current_ep=done + 1,
                         last_completed_ep=done, last_end_pos=store.pos_key(episodes[done - 1].end),
                         last_completed_at=last_day.isoformat(), restart_count=0, started_at=started)
-    store.save_gift(user_id, sid, mid, "letter", now=started,
-                    letter_text=f"{mid}화까지 온 나에게. 바빴을 텐데 여기까지 왔네. 남은 것도 천천히 가 보자.")
+    if mid:
+        store.save_gift(user_id, sid, mid, "letter", now=started,
+                        letter_text=f"{mid}화까지 온 나에게. 바빴을 텐데 여기까지 왔네. 남은 것도 천천히 가 보자.")
+        if done >= mid:  # 이미 지나온 중간 선물은 받은 것으로
+            store.mark_gift_delivered(user_id, sid, mid, now.isoformat())
     store.save_gift(user_id, sid, final, "gifticon", gift_item="아메리카노 (예시)", now=started,
                     letter_text="끝까지 온 나에게. 수고했어, 커피 한 잔 하자.")
-    if done >= mid:  # 이미 지나온 중간 선물은 받은 것으로
-        store.mark_gift_delivered(user_id, sid, mid, now.isoformat())
 
 
 def ensure_comeback_user(now: datetime) -> None:

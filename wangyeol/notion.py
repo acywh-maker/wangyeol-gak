@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import requests
 import streamlit as st
@@ -22,6 +24,7 @@ _NESTABLE = {
     "heading_1", "heading_2", "heading_3", "column_list", "column", "synced_block", "to_do",
 }
 _MAX_DEPTH = 3
+YOUTUBE_LENGTHS = Path(__file__).with_name("youtube_lengths.json")  # {영상 id: {"seconds", "title"}}
 # 노션에서 마지막으로 읽은 때 (캐시 안쪽에서만 기록 — 캐시가 비었는지 알아 인트로를 띄울지 정한다)
 _loaded_at: dict = {}
 
@@ -140,9 +143,23 @@ def is_warm(nickname: str) -> bool:
     return all(fresh(r["id"]) for r in seasons_for(nickname))
 
 
-@st.cache_data(ttl=60 * 60 * 24 * 7, show_spinner=False)
+def _saved_lengths() -> dict:
+    try:
+        return json.loads(YOUTUBE_LENGTHS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
 def youtube_info(video_id: str) -> dict | None:
-    """유튜브 영상 길이(초)와 제목. watch 페이지를 읽는다(키 불필요). 실패하면 None."""
+    """유튜브 영상 길이(초)와 제목. 저장해 둔 길이 파일을 먼저 보고, 없으면 watch 페이지를 읽는다.
+    배포 서버(Streamlit Cloud)에서는 유튜브가 watch 페이지를 막아 길이를 못 읽으므로 파일이 필요하다
+    (못 읽으면 영상이 0분으로 잡혀 회차가 1~2화로 줄어듦). 파일은 scripts/build_youtube_lengths.py로 만든다."""
+    return _saved_lengths().get(video_id) or youtube_from_watch(video_id)
+
+
+@st.cache_data(ttl=60 * 60 * 24 * 7, show_spinner=False)
+def youtube_from_watch(video_id: str) -> dict | None:
+    """watch 페이지에서 길이(초)와 제목(키 불필요). 실패하면 None."""
     try:
         r = requests.get(
             f"https://www.youtube.com/watch?v={video_id}", timeout=5,
