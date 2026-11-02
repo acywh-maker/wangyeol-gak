@@ -14,7 +14,7 @@ import streamlit as st
 from PIL import Image
 
 import ds
-from wangyeol import auth, notion, parser, rules, service, store, text
+from wangyeol import auth, demo, notion, parser, rules, service, store, text
 from wangyeol.render import md, render_segment, reset_images, show
 
 st.set_page_config(page_title="완결각", page_icon=str(Path(__file__).parent / "Icon" / "WGG.svg"), layout="centered")
@@ -158,8 +158,8 @@ def intro_while_loading(slot=None) -> None:
     except notion.NotionError:
         return  # 목록을 못 읽으면 서재 화면이 알린다
     slot = slot or st.empty()
-    # 사용자 이미지(390×693)의 그림 속 버튼(아래 53px)은 잘라 낸다 — 390:640 비율이면 크기(1x·3x)와 상관없이 같은 자리
-    slot.html(f'<div class="wg-onboard">{img_tag(ONBOARD_IMAGE, max_ratio=640 / 390, quality=95, alt=ONBOARD_ALT)}</div>')
+    # 사용자 이미지 그대로(아래 '나의 첫 완결 만들기' 띠까지, 자르지 않음 — 사용자 지정)
+    slot.html(f'<div class="wg-onboard">{img_tag(ONBOARD_IMAGE, quality=95, alt=ONBOARD_ALT)}</div>')
     try:
         for r in notion.seasons_for(ss.user["nickname"]):
             notion.load_season(r)
@@ -195,6 +195,10 @@ def entry() -> None:
         ss.pending_cookie = auth.issue_token(user["user_id"])
         log("signup" if is_new else "login")
         intro_while_loading(page)
+        try:
+            demo.reset_comeback(user, now())  # 시연 계정 '소설'이면 3화까지 보고 4일 쉰 상태로
+        except notion.NotionError:
+            pass  # 노션을 못 읽으면 기록을 그대로 두고 서재가 오류를 알린다
         go("library")
 
 
@@ -689,6 +693,15 @@ def dev_sidebar() -> None:
 
 
 # ---------- 라우팅 ----------
+
+@st.cache_resource(show_spinner=False)
+def _demo_ready() -> bool:
+    """앱이 켜질 때 한 번: 시연 계정 '소설'이 없으면 만든다(배포 사이트는 Reboot하면 기록이 지워진다)."""
+    demo.ensure_comeback_user(now())
+    return True
+
+
+_demo_ready()
 
 if "user" not in ss:
     cookie_user = auth.user_from_cookie()

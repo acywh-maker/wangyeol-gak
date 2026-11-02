@@ -95,6 +95,16 @@ def create_user(nickname: str, pin_hash: str, salt: str, now: str) -> dict:
                              "salt": salt, "created_at": now, "login_token_hash": "", "theme": "dark"})
 
 
+def clear_user_records(user_id: str) -> None:
+    """계정은 두고 그 사람의 진행·완료·한 줄·예측·선물·이벤트 기록만 지운다 (시연·점검 계정 초기화)."""
+    with _LOCK:
+        data = _load()
+        for t in TABLES:
+            if t != "users":
+                data[t] = [r for r in data[t] if r.get("user_id") != user_id]
+        _save(data)
+
+
 def set_login_token(user_id: str, token_hash: str) -> None:
     _upsert("users", {"user_id": user_id}, {"login_token_hash": token_hash})
 
